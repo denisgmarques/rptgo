@@ -1,26 +1,41 @@
-/* Vendas por regiao: uma quebra (regiao) com total e contagem no fim de cada grupo. */
+/* Vendas por regiao com quebra em dois niveis: regiao e, dentro dela, ano/mes da venda.
+   A chave do mes e calculada (ano * 100 + mes) e ganha o apelido <periodo>, que da nome
+   as secoes before/after. Subtotal por mes, total e media por regiao, total geral. */
 input
-   regiao    [string 10],
-   vendedor  [string 14],
-   valor     [amount 10]
+   regiao      [string 10],
+   vendedor    [string 14],
+   data_venda  [ldate 10],
+   valor       [amount 10]
 
-width 60
-length 26
-sort regiao
+width 62
+length 40
+sort regiao, <periodo> (mdy(data_venda,2) * 100 + mdy(data_venda,0)), data_venda
 
 before report
-   print 'VENDAS POR REGIAO' centered
-   print 'Regiao' in col 1, 'Vendedor' in col 14, 'Valor' in col 38
-   print 40[-] in col 1
+   print 'VENDAS POR REGIAO E MES' centered
+   skip
+
+before regiao
+   need 16
+   print 'REGIAO ' + regiao in col 1
+   print 58[-] in col 1
+
+before periodo
+   print 'Mes ' in col 3, mdy(data_venda,0) in col 7 using '&&', '/' in col 9, mdy(data_venda,2) in col 10 using '&&&&'
 
 detail
-   print regiao in col 1, vendedor in col 14, valor in col 30 using '#,###,##&.&&'
+   print data_venda in col 5, vendedor in col 17, valor in col 40 using '#,###,##&.&&'
+
+after periodo
+   print 'Subtotal do mes' in col 5, count(*) in col 30 using '#&', ' venda(s)' in col 33, total(valor) in col 43 using '#,###,##&.&&'
+   skip
 
 after regiao
-   print 'Total ' + regiao in col 1, total(valor) in col 30 using '#,###,##&.&&'
-   print 'Vendas:' in col 1, count(*) in col 30 using '#########'
+   print 'TOTAL ' + regiao in col 1, count(*) in col 30 using '#&', ' vendas' in col 33, total(valor) in col 43 using '#,###,##&.&&'
+   print 'Media por venda' in col 3, avg(valor) in col 43 using '#,###,##&.&&'
+   print 58[-] in col 1
    skip
 
 after report
-   print 'TOTAL GERAL' in col 1, total(valor) in col 30 using '#,###,##&.&&'
+   print 'TOTAL GERAL' in col 1, count(*) in col 30 using '#&', ' vendas' in col 33, total(valor) in col 43 using '#,###,##&.&&'
 end

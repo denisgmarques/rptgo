@@ -10,13 +10,37 @@ import (
 const dirExemplos = "../../examples/"
 
 func TestExemploVendasRegiao(t *testing.T) {
-	code, out, errb := executa(t, "", dirExemplos+"relatorio-vendas-regiao/relatorio.rp", dirExemplos+"relatorio-vendas-regiao/dados.txt")
+	dir := dirExemplos + "relatorio-vendas-regiao/"
+	code, out, errb := executa(t, "", dir+"relatorio.rp", dir+"dados.txt")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errb)
 	}
-	for _, want := range []string{"Total Leste", "Total Norte", "Total Sul", "TOTAL GERAL", "7,192.00", "3,661.35"} {
+	for _, want := range []string{"REGIAO Leste", "REGIAO Norte", "REGIAO Sul", "Subtotal do mes",
+		"TOTAL Leste", "5,585.30", "TOTAL Norte", "8,031.95", "TOTAL Sul", "8,852.00", "TOTAL GERAL", "22,469.25", "21  vendas"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("saída sem %q:\n%s", want, out)
+		}
+	}
+	// dentro de cada região os meses vêm em ordem cronológica, inclusive na virada de ano, e as
+	// vendas de um mês ficam juntas sob o seu "Mes MM/AAAA"
+	for _, regiao := range []string{"REGIAO Leste", "REGIAO Norte", "REGIAO Sul"} {
+		i := strings.Index(out, regiao)
+		bloco := out[i:]
+		if j := strings.Index(bloco, "TOTAL "); j > 0 {
+			bloco = bloco[:j]
+		}
+		p12, p01, p02 := strings.Index(bloco, "Mes 12/2025"), strings.Index(bloco, "Mes 01/2026"), strings.Index(bloco, "Mes 02/2026")
+		if !(p12 >= 0 && p12 < p01 && p01 < p02) {
+			t.Errorf("%s: meses fora de ordem (%d, %d, %d):\n%s", regiao, p12, p01, p02, bloco)
+		}
+		if n := strings.Count(bloco, "Subtotal do mes"); n != 3 {
+			t.Errorf("%s: %d subtotais, esperados 3", regiao, n)
+		}
+	}
+	// os subtotais por mês de uma região: Leste dez/jan/fev
+	for _, want := range []string{"1,230.25", "1,760.40", "2,594.65"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("faltou o subtotal %s", want)
 		}
 	}
 }

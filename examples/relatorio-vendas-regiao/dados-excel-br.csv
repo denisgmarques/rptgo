@@ -1,8 +1,22 @@
-﻿regiao;vendedor;valor
-Sul;Ana Souza;1.250,50
-Norte;Bruno Lima;980,00
-Sul;Carla Dias;2.100,75
-Leste;Diego Alves;450,25
-Norte;Elisa Prado;1.320,40
-Leste;Fabio Neri;780,00
-Sul;Gina Rocha;310,10
+﻿regiao;vendedor;data_venda;valor
+Norte;Bruno Lima;11/12/2025;980,00
+Sul;Gina Rocha;19/02/2026;920,00
+Sul;Gina Rocha;13/01/2026;310,10
+Sul;Ana Souza;02/12/2025;1.250,50
+Norte;Bruno Lima;10/02/2026;865,30
+Norte;Elisa Prado;24/02/2026;495,50
+Sul;Ana Souza;27/02/2026;755,45
+Leste;Diego Alves;26/02/2026;388,60
+Sul;Ana Souza;22/01/2026;1.875,00
+Sul;Carla Dias;05/02/2026;1.640,20
+Sul;Carla Dias;16/12/2025;2.100,75
+Norte;Elisa Prado;29/12/2025;1.320,40
+Leste;Diego Alves;04/12/2025;450,25
+Norte;Bruno Lima;06/01/2026;1.450,00
+Leste;Helena Costa;14/02/2026;1.275,90
+Leste;Helena Costa;27/01/2026;640,00
+Leste;Diego Alves;09/01/2026;1.120,40
+Leste;Fabio Neri;18/12/2025;780,00
+Norte;Ivo Mendes;17/02/2026;2.210,00
+Leste;Fabio Neri;03/02/2026;930,15
+Norte;Elisa Prado;21/01/2026;710,75
