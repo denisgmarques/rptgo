@@ -182,9 +182,7 @@ func FmtMascara(v Value, mask string) (string, error) {
 		}
 	}
 	var sb strings.Builder
-	for i := len(restantes) - 1; i >= 0; i-- { // sobra: dígitos que não couberam na máscara
-		sb.WriteByte(restantes[i])
-	}
+	sb.Write(restantes) // sobra: dígitos mais altos que não couberam na máscara, na ordem certa
 	sb.Write(res)
 	if casas > 0 {
 		sb.WriteString(cfg("RADIXSEP", "."))

@@ -13,12 +13,19 @@ import (
 const dirGolden = "../../internal/report/testdata/golden"
 
 // executa roda executar() com o relógio fixo e sem variáveis de configuração herdadas.
+// envExtra são variáveis de ambiente extras aplicadas por executa (usadas pelos testes da referência).
+var envExtra []string
+
 func executa(t *testing.T, stdin string, args ...string) (int, string, string) {
 	t.Helper()
 	t.Setenv("RPT_NOW", "2026-11-24 17:47")
-	for _, k := range []string{"DATEFMT", "CENTURY_CUTOFF", "TIMEFMT", "WIDTH", "PAGELN", "SEPARATOR", "RADIXSEP", "CURRSYM"} {
+	for _, k := range []string{"DATEFMT", "CENTURY_CUTOFF", "TIMEFMT", "WIDTH", "PAGELN", "SEPARATOR", "RADIXSEP", "TRIADSEP", "CURRSYM"} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
+	}
+	for _, kv := range envExtra { // variáveis de ambiente de um exemplo (marcador env nos .md)
+		k, v, _ := strings.Cut(kv, "=")
+		t.Setenv(k, v)
 	}
 	var out, errb bytes.Buffer
 	code := executar(args, strings.NewReader(stdin), &out, &errb)
