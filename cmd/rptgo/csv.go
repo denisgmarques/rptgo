@@ -42,6 +42,8 @@ func valorCSV(v report.Value, decimal rune) (txt string, ehTexto bool, err error
 		return "", false, nil
 	case time.Time:
 		return x.Format(formatoISO), false, nil
+	case report.Hora:
+		return x.ISO(), false, nil
 	case int64:
 		return strconv.FormatInt(x, 10), false, nil
 	case float64:

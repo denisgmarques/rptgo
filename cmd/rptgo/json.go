@@ -17,6 +17,8 @@ func valorJSON(v report.Value) ([]byte, error) {
 		return []byte("null"), nil
 	case time.Time:
 		return json.Marshal(x.Format(formatoISO))
+	case report.Hora:
+		return json.Marshal(x.ISO())
 	case int64, float64, bool, string:
 		return json.Marshal(x)
 	}

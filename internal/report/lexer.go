@@ -12,6 +12,7 @@ type TokKind int
 const (
 	TokNum TokKind = iota
 	TokStr
+	TokHora // constante de hora sem aspas, ex. 14:30
 	TokData // constante de data sem aspas, ex. 02/08/2026 (duas barras distingue de divisão)
 	TokRep  // caractere repetido, ex. 27[-]
 	TokID
@@ -33,6 +34,7 @@ type Token struct {
 
 var reNum = regexp.MustCompile(`^\d+(\.\d*)?|^\.\d+`)
 var reDataLit = regexp.MustCompile(`^\d{1,4}/\d{1,4}/\d{1,4}`)
+var reHoraLit = regexp.MustCompile(`^\d{1,2}:\d{2}`)
 var reID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`)
 
 var ops2 = map[string]bool{"<>": true, "^=": true, "!=": true, "<=": true, ">=": true, "/+": true}
@@ -127,6 +129,10 @@ func Tokenize(src string, comentarioUmaLinha bool) ([]Token, error) {
 			}
 			toks = append(toks, Token{Kind: TokStr, Text: string(buf), Line: linha})
 			i = j + 1
+		case c >= '0' && c <= '9' && reHoraLit.MatchString(restante(i)):
+			m := reHoraLit.FindString(restante(i))
+			toks = append(toks, Token{Kind: TokHora, Text: m, Line: linha})
+			i += len([]rune(m))
 		case c >= '0' && c <= '9' && reDataLit.MatchString(restante(i)):
 			m := reDataLit.FindString(restante(i))
 			toks = append(toks, Token{Kind: TokData, Text: m, Line: linha})

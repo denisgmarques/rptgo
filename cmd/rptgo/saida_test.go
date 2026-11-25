@@ -302,3 +302,27 @@ func TestEscreveCSVAspasEEscapesComDelimitadorNoTexto(t *testing.T) {
 		t.Errorf("round-trip: %q %v", lido, err)
 	}
 }
+
+func TestHoraEmCSVEJSONEEntradas(t *testing.T) {
+	dir := t.TempDir()
+	rp := dir + "/s.rp"
+	writeFile(t, rp, "input\n  nome [string 10],\n  saida [time],\n  volta [time]\ndetail\n  print nome, saida, volta\nend\n")
+	writeFile(t, dir+"/d.txt", "Ana|8:05|17:30:15\nBeto|23:59|\n")
+	_, csvOut, _ := executa(t, "", "--format", "csv", rp, dir+"/d.txt")
+	if want := "nome,saida,volta\nAna,08:05:00,17:30:15\nBeto,23:59:00,\n"; csvOut != want {
+		t.Errorf("csv:\n%q\nwant %q", csvOut, want)
+	}
+	_, jsonOut, _ := executa(t, "", "--format", "json", rp, dir+"/d.txt")
+	if !strings.Contains(jsonOut, `{"nome":"Ana","saida":"08:05:00","volta":"17:30:15"}`) || !strings.Contains(jsonOut, `"volta":null`) {
+		t.Errorf("json: %s", jsonOut)
+	}
+	// o que foi exportado volta como fonte e dá o mesmo relatório
+	_, original, _ := executa(t, "", rp, dir+"/d.txt")
+	for _, f := range []string{"csv", "json"} {
+		_, exp, _ := executa(t, "", "--format", f, rp, dir+"/d.txt")
+		code, volta, errb := executa(t, exp, "--input", f, rp, "-")
+		if code != 0 || volta != original {
+			t.Errorf("%s: ida e volta diferente (exit %d %s)", f, code, errb)
+		}
+	}
+}

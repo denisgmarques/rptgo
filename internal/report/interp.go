@@ -133,6 +133,15 @@ func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
 			return nil, nil
 		}
 		return normalizaBool(t), nil
+	case col.Type == "time":
+		h, ok, err := ParseHora(t)
+		if err != nil {
+			return nil, ErroLinhaDados(ln, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, ln, txt, err)
+		}
+		if !ok {
+			return nil, nil
+		}
+		return h, nil
 	case col.Type == "date" || col.Type == "ldate":
 		d, ok, err := ParseData(t)
 		if err != nil {
@@ -203,7 +212,7 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		ano, mes, dia := it.agora.Date()
 		return time.Date(ano, mes, dia, 0, 0, 0, 0, it.agora.Location()), nil
 	case HourExpr:
-		return horaAtual(it.agora), nil
+		return horaDoDia(it.agora), nil
 	case PageNoExpr:
 		return int64(it.pageno), nil
 	case NegExpr:
@@ -700,6 +709,9 @@ func (it *Interp) printStmt(st PrintStmt) error {
 func (it *Interp) formata(v, m Value, longa bool) ([]string, error) {
 	if v == nil {
 		return []string{""}, nil
+	}
+	if h, ok := v.(Hora); ok {
+		return []string{FmtHora(h)}, nil
 	}
 	if d, ok := v.(time.Time); ok {
 		return []string{FmtData(d, true, longa)}, nil

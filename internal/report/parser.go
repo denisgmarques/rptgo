@@ -684,6 +684,12 @@ func (ps *parser) ePrim() (Expr, error) {
 		return ConstExpr{Val: tk.Text}, nil
 	case TokRep:
 		return ConstExpr{Val: strings.Repeat(tk.RepChar, tk.RepN)}, nil
+	case TokHora:
+		h, _, err := ParseHora(tk.Text)
+		if err != nil {
+			return nil, ErroLinhaScript(tk.Line, "%v", err)
+		}
+		return ConstExpr{Val: h}, nil
 	case TokData:
 		d, ok, err := ParseData(tk.Text)
 		if err != nil {

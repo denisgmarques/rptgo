@@ -45,6 +45,8 @@ func normaliza(a, b Value) (Value, Value) {
 			a = ""
 		case time.Time:
 			a = time.Time{}
+		case Hora:
+			a = Hora(0)
 		default:
 			a = int64(0)
 		}
@@ -55,6 +57,8 @@ func normaliza(a, b Value) (Value, Value) {
 			b = ""
 		case time.Time:
 			b = time.Time{}
+		case Hora:
+			b = Hora(0)
 		default:
 			b = int64(0)
 		}
@@ -145,6 +149,14 @@ func comparar(op string, a, b Value) (bool, error) {
 		b = boolParaInt(x)
 	}
 	a, b = normaliza(a, b)
+	ha, aH := a.(Hora)
+	hb, bH := b.(Hora)
+	if aH || bH {
+		if !aH || !bH {
+			return false, Erro("não é possível comparar uma hora com outro tipo")
+		}
+		return cmpOrdenado(op, ha < hb, ha == hb, ha > hb), nil
+	}
 	_, aStr := a.(string)
 	_, bStr := b.(string)
 	if aStr != bStr {
@@ -197,6 +209,9 @@ func aritm(op string, a, b Value) (Value, error) {
 	}
 	if x, ok := b.(bool); ok {
 		b = boolParaInt(x)
+	}
+	if ah, bh, ok := horasEmOperacao(a, b); ok {
+		return aritmHora(op, a, b, ah, bh)
 	}
 	ad, aok := a.(time.Time)
 	bd, bok := b.(time.Time)
@@ -268,4 +283,49 @@ func aritm(op string, a, b Value) (Value, error) {
 		return math.Mod(fa, fb), nil
 	}
 	return nil, Erro("operador desconhecido: %s", op)
+}
+
+// horasEmOperacao diz se algum dos operandos é uma Hora.
+func horasEmOperacao(a, b Value) (Hora, Hora, bool) {
+	ha, aok := a.(Hora)
+	hb, bok := b.(Hora)
+	return ha, hb, aok || bok
+}
+
+// aritmHora implementa a aritmética de horas do dia: hora - hora dá os minutos entre elas;
+// hora +/- número soma ou subtrai minutos (dando a volta em 24h, pois é uma hora do dia);
+// somar duas horas não existe.
+func aritmHora(op string, a, b Value, ha, hb Hora) (Value, error) {
+	_, aH := a.(Hora)
+	_, bH := b.(Hora)
+	minutos := func(v Value) (float64, bool) {
+		switch v.(type) {
+		case nil, int64, float64:
+			return paraFloat(v), true
+		}
+		return 0, false
+	}
+	soma := func(h Hora, min float64) Value {
+		s := (int64(h) + int64(min*60)) % 86400
+		if s < 0 {
+			s += 86400
+		}
+		return Hora(s)
+	}
+	switch {
+	case aH && bH && op == "-":
+		return (int64(ha) - int64(hb)) / 60, nil
+	case aH && !bH && (op == "+" || op == "-"):
+		if m, ok := minutos(b); ok {
+			if op == "-" {
+				m = -m
+			}
+			return soma(ha, m), nil
+		}
+	case bH && !aH && op == "+":
+		if m, ok := minutos(a); ok {
+			return soma(hb, m), nil
+		}
+	}
+	return nil, Erro("operação inválida com horas")
 }
