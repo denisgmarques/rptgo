@@ -6,38 +6,26 @@
 
 ### Not applicable in this repository
 
-No persistence layer exists: no migrations directory, no ORM models, no schema files, no database driver in the dependency manifest (`persistence.present: false`, `persistence.evidence: []`, `dependencies.runtime: []`). Input is a flat delimited text file (or stdin) read once per run and held entirely in memory — confirmed by `leRegistros` returning a `[][]string` slice built from `strings.Split` (`cmd/rptgo/main.go:229-250`) and `Interp.converte` building a `[]Row` slice from it (`internal/report/interp.go:72-92`). Nothing is written back except the rendered report text.
+No persistence layer: no migrations directory, no ORM models, no schema files, no database driver in `go.mod` (no dependencies). Data enters via file or stdin and leaves via stdout or a file. In-memory structures only, below.
 
-### Input column types and the `bool` column
-Each `input` column is converted by `Interp.tipa` (`internal/report/interp.go`) into a `Value` (`nil`, `int64`, `float64`, `string`, `time.Time` or `bool`). The runtime `Row` still maps column name to `Value`.
+### In-memory structures
 
-`bool` columns (`flag [bool]`, no length accepted or required) are normalized from the trimmed text by `normalizaBool` (`internal/report/value.go`). An empty field is `nil`, like every other type, and an invalid value is `nil` too — it never raises a data-line error:
-
-| Input text | Value |
-|---|---|
-| any valid float: `0`, `0.0`, `0.0e6` | `false` |
-| any other valid float: `1`, `999`, `9.6`, `1.0`, `1.0e6`, `-3` | `true` |
-| text starting with `N` or `F` (case-insensitive): `NO`, `FALSE` | `false` |
-| text starting with `Y` or `T` (case-insensitive): `YES`, `TRUE` | `true` |
-| anything else: `5xx`, `xxx`, `0.x`, `*` | `nil` |
-
-A number is tried first, so `0.x` and `5xx` are `nil`. Printing and expression behavior is described in `domain_rules.md`. Tests: `internal/report/bool_test.go`.
+| Type | Definition | Notes |
+|---|---|---|
+| `Row` | `[]Value`, positional per `input` column (`interp.go`) | nil = null; name resolved by shared `Interp.colIdx` map (name to index) |
+| `Value` | `any`: nil, int64, float64, string, time.Time, bool (`value.go`) | Dynamic typing |
+| `InputCol` | `Name`, `Type`, `Len`, `HasLen` (`ast.go`) | Declared in `input` |
+| `SortKey` | `Name`, `Expr`, `Desc` | Name usable in `before`/`after` |
+| `EventKey` | `Kind`, `Target` | Key of `Script.Events` |
+| `Script` | Input, Width, Length, Top, Bottom, Left, Separator, Sort, Events, Variaveis | Result of `Parse` |
+| `Interp` | script, rows, `vars`, page buffers, aggregate rows, clock | Per-run state |
 
 ### Cache
-In-memory runtime state lives entirely on the `Interp` struct for the duration of one `Run()` call — there is no persistent cache, no TTL, no eviction (`internal/report/interp.go:24-47`):
 
-| Field | Type | Role |
-|---|---|---|
-| `rows` | `[]Row` (`Row = map[string]Value`) | all converted input records, sorted in place by `ordena()` |
-| `aggRows` | `[]Row` | the current break-level group, scoped to `after`/`before` execution for `count`/`total`/`avg`/`min`/`max` |
-| `vars` | `map[string]Value` | script-level `set` variables, reset to a saved snapshot after the footer dry-run measurement |
-| `row` | `Row` | the "current" record during expression evaluation |
-| `corpo` | `[]string` | lines accumulated for the page currently being built |
-| `paginas` | `[][]string` | finished pages, concatenated at the end into the final report string |
-| `buf` / `extras` | `[]rune` / `[]extraItem` | the in-progress print line buffer and overflow lines (from multi-line `using` masks) before a `flush()` |
+No cache. `Interp.vars` holds `set` variables for one run; the whole input is read into memory (`io.ReadAll`) and all rows are retained; `BenchmarkConverte200k` measures this (200k rows).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — the `Interp` layer these in-memory structures belong to.
-- [`domain_rules.md`](domain_rules.md) — the break-cascade and pagination rules that populate/drain this state.
-- [`dependencies.md`](dependencies.md) — confirms zero database/cache client dependencies.
+- [`domain_rules.md`](domain_rules.md) — conversion and typing rules
+- [`architecture.md`](architecture.md) — where structures live
+- [`api_contracts.md`](api_contracts.md) — serialized output

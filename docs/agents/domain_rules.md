@@ -5,108 +5,111 @@
 ## AS IS — Current state
 
 ### Overview
-The domain is a fixed-column report-definition language (a `.rp` script) interpreted against a flat delimited data file. It encodes:
-- input schema + typed columns (`internal/report/ast.go:84-89`, `InputCol`)
-- sort order with named break levels (`internal/report/ast.go:93-97`, `SortKey`)
-- event sections with break cascade (`before`/`after <key>`, `header`, `footer`, `detail`) (`internal/report/interp.go:769-856`)
-- aggregate functions scoped to break-closing sections (`count`/`total`/`avg`/`min`/`max`, `internal/report/interp.go:280-361`)
-- `using` print masks — own notation and printf-style (`internal/report/format.go:66-200`)
-- pagination with pre-measured footer height and page-fill behavior (`internal/report/interp.go:403-485`, `739-757`)
-- date semantics driven by `DATEFMT`/`CENTURY_CUTOFF`, with `date` (2-digit year) vs `ldate` (4-digit year) as distinct column types (`internal/report/dates.go:75-94`)
 
-### Column type coercion
-- Implemented in `Interp.tipa` (`internal/report/interp.go:94-138`), called once per field during `converte`.
+- Script (`.rp`) = `input` columns, optional `width`/`length`/margins/`separator`/`sort`, event sections, final `end` (`parser.go`).
+- Event kinds: `before`, `after`, `header`, `footer`, `detail` (`eventos` map in `parser.go`). `before`/`after` target `report` or a sort-key name.
+- Statements: `print`, `skip`, `page`, `need`, `set`, `if/else`, `begin...end` (`ast.go`).
+- Values are dynamically typed; null is `nil`.
 
-| Declared type | Coercion | Empty/invalid handling |
+### Script defaults
+
+| Setting | Default | Source |
 |---|---|---|
-| `numeric`/`integer`/`long`/`int` | `strconv.ParseFloat` then `math.Trunc` → `int64` | empty string → `nil`; parse failure → `ErroLinhaDados` |
-| `float`/`amount`/`double`/`real`/`huge` | `strconv.ParseFloat` → `float64` | empty string → `nil`; parse failure → `ErroLinhaDados` |
-| `date`/`ldate` | `ParseData` (DATEFMT order) | empty/unparseable → `nil` unless literally malformed (slashes present but not numeric) → error |
-| `string` (with declared length) | right-trimmed, truncated to `col.Len` runes | no error path — silently truncated |
-| anything else (default `string`) | right-trimmed as-is | — |
+| width | 80 (env `WIDTH`) | `parser.go` |
+| length | 66 (env `PAGELN`) | `parser.go` |
+| top/bottom/left margin | 2 / 2 / 2 | `parser.go` |
+| separator | `\|` (env `SEPARATOR`, or `separator` stmt) | `parser.go` |
 
-A record whose field count does not match the `input` column count fails immediately: `"phase error no arquivo de entrada: registro %d tem %d campos, esperados %d"` (`internal/report/interp.go:77-80`).
+Script without `input` or without final `end` fails parse.
 
-### Break cascade (multi-level sort)
-- Implementing code: `Interp.Run` main loop (`internal/report/interp.go:800-842`).
-- Sort levels come from the `sort` clause, each optionally named via `<nome> expr` or inherited from a bare column reference (`parser.go:212-244`, `pSort`).
-- On every row, the engine computes the sort key vector and compares it to the previous row's key, finding the first level index `quebra` where they differ (`nn` = no change, i.e. same group).
+### Input conversion
 
-| Event | Fires when | Order | Row/group passed |
-|---|---|---|---|
-| `before report` | first row only | once, before any level `before` | first row |
-| `before <level>` | level index `j >= quebra` (new or continuing from report start) | outer level first → inner level last (`j` ascending) | first row of new group |
-| `detail` | every row | after all `before` for that row | current row |
-| `after <level>` | level index `j` from `nn-1` down to `quebra`, when key changes (or at end of data) | inner level first → outer level last (`j` descending) | last row of the closing group + the group's row slice (for aggregates) |
-| `after report` | after the last row's level closes | once, last | last row + all rows |
+`Interp.tipa` (`interp.go`):
 
-Extend by adding a `<level>` to `sort` (named via `<name> expr`) and declaring matching `before <name>`/`after <name>` sections; `verificaEventos` rejects a `before`/`after` target that is not a known sort name (`internal/report/interp.go:140-157`).
-
-### Aggregate functions scoped to break closings
-- `count`, `total`, `avg`, `min`, `max` only evaluate inside a section run with `aggAtivo=true` — set exclusively by `roda()` when executing `after <level>`/`after report` (`internal/report/interp.go:773-782`, `280-284`). Calling them elsewhere: `"a função %s() só pode ser usada em 'after sort_key' e 'after report'"`.
-- `count(*)` counts group rows; `count(* where expr)` filters with `Where` evaluated per row (`internal/report/interp.go:286-310`).
-- `total`/`avg` ignore `nil` values; `total` stays `int64` if every contributing value was `int64`, else promotes to `float64` (`internal/report/interp.go:321-337`).
-- `min`/`max` walk non-nil values using the same `comparar` used for sort/compare expressions (`internal/report/interp.go:347-359`).
-
-### Pagination and footer pre-measurement
-- Page capacity: `cap() = Length - Top - Bottom - altRodape` (`internal/report/interp.go:403-405`).
-- Footer height (`altRodape`) is measured with a dry run before real execution: runs the `footer` section once with the first row, into a throwaway buffer, counts emitted lines, then resets `vars`/`pageno` (`internal/report/interp.go:742-757`).
-- A page breaks (`novaPagina`) automatically once `len(corpo) >= cap()` on `emite`, or explicitly via `page` / `need n` statements (`internal/report/interp.go:407-416`, `501-507`).
-- `fechaPagina`: flushes the current buffer, runs `footer` (unless `page, no footer`), pads with blank lines up to `cap()` before the footer so the footer always lands at the same vertical position, then prepends `Top` blank lines (`internal/report/interp.go:447-470`).
-- Page fill mode: default pads every page to `Length` lines with blank strings (`it.preenche`); `--form-feed` disables padding and joins pages with `\f` instead (`internal/report/interp.go:463-467`, `860-863`, `cmd/rptgo/main.go` `op.formFeed`).
-
-### `using` mask notation (numeric)
-- Implemented in `FmtMascara` (`internal/report/format.go:66-200`). Two dialects: printf-style (`^%(-?)(\d*)(?:\.(\d+))?l{0,2}([dfi])$`) and the engine's own character notation.
-
-| Mask char | Meaning |
+| Column type | Result |
 |---|---|
-| `#` | digit position, blank-padded (no leading zero) |
-| `&` | digit position, zero-padded; also "sticky" — once seen, later `#`/`$`/`*`/`+`/`-`/`(` in the same mask become `&` too (`format.go:87-94`) |
-| `*` | digit position, `*`-padded (check protection) |
-| `+` / `-` | sign position (first `+`/`-` only; `-` only prints for negative, `+` prints `+` or `-`) |
-| `$` | currency symbol from `CURRSYM` env var (default `$`), first character only, printed once |
-| `(` `)` | accounting negative parentheses — printed only when the value is negative |
-| `,` | thousands separator, printed only if a digit was placed there |
-| `.` | decimal point → rendered via `RADIXSEP` env var (default `.`); digit count after `.` (ignoring `)`/`,`) sets rounding precision |
+| `numeric`, `integer`, `long`, `int` | int64 (float parsed, truncated); empty = null |
+| `float`, `amount`, `double`, `real`, `huge` | float64; empty = null |
+| `bool` | see Bool columns |
+| `date`, `ldate` | time.Time via `ParseData`; empty = null |
+| `string` | right-trimmed, cut to declared length; other types (`text`) right-trimmed |
 
-- Rounding: half-up on the decimal string representation (`arredondaMeioParaCima`, `internal/report/format.go:25-58`), with manual digit-carry increment (`incrementarDigitos`) to avoid binary float noise.
-- Overflow (value needs more digits than the mask provides) is NOT truncated — extra leading digits are prepended raw (`format.go:180-183`).
+- Record field count must equal column count, else "phase error" (`ErroLinhaDados`).
+- Empty line = record with 1 empty field (`leRegistros`), so it errors unless input has 1 column.
+- Header line dropped when `--header sim`, or `auto` and first field equals first column name (case-insensitive).
+- A trailing separator (1 extra empty field) is ignored.
+- Variable named like a column fails (`verificaEventos`); `before/after <name>` must match a sort name.
 
-### `using` mask notation (text)
-- `'N'` or `'Nr'` on a string/text column word-wraps at width `N` into multiple print lines (`ehMascaraString`, `QuebraTexto`, `internal/report/format.go:202-244`); the `r` suffix is accepted but does not change wrapping (confirmed single word-wrap algorithm).
-- Applying a numeric mask to a text value prints blank, not an error (`internal/report/format.go:646-648`).
+### Bool columns
 
-### Column type → year width (`date` vs `ldate`)
-- Both parse the same way via `ParseData` (DATEFMT-ordered, `CENTURY_CUTOFF`-adjusted 2-digit years) (`internal/report/dates.go:23-73`).
-- Print width is fixed by the declared column TYPE, not by the DATEFMT text: `date` always prints a 2-digit year, `ldate` always 4-digit — `FmtData(d, valido, longa)` where `longa` comes from `Interp.ehLdate` checking the column's declared type (`internal/report/dates.go:78-94`, `internal/report/interp.go:535-546`).
+- `normalizaBool` (`value.go`): numeric text 0 = false, other number = true; else first letter N/F = false, Y/T = true (case-insensitive); anything else = null.
+- Print without mask: `YES`/`NO`; null bool column prints `***` (`formata`, `printStmt`). With mask: 1/0.
+- Arithmetic and comparison convert bool to 1/0 (`comparar`, `aritm`).
+- CSV/JSON emit `true`/`false`.
 
-### Logical vs arithmetic expressions
-- Logical operations (`and`, `or`, `not`, `=`, `<>`/`^=`/`!=`, `<`, `>`, `<=`, `>=`, `is [not] null`) evaluate to `int64` 1 (true) or 0 (false) and can be used inside arithmetic (`(n > 1) + 1` is `2` or `1`). Arithmetic operations (`+ - * /`, unary `-`), constants, function calls and non-`bool` columns are arithmetic.
-- A static check (`verificaTipos`, `internal/report/tipos.go`) runs at the end of `Parse`. It rejects an arithmetic expression where a logical one is required: the `if` condition, the operands of `and`/`or`/`not`, and the `where` of `count(* where expr)`. The error is `linha N: a condição do 'if' precisa ser uma expressão lógica ...` (the `if` case carries the script line via `IfStmt.Line`; other cases have no line). So `if n then` (numeric column), `if 1 then`, `if s then` (string column) and `1 and 1 and not 0` are errors.
-- `bool` columns are logical. `set` variables and unknown names have no static type (`tDesconh`) and are accepted anywhere; an unknown column name still fails at runtime.
-- Precedence, lowest to highest: `or`, `and`, `not`, comparison/`is null`, `+ -`, `* /`, unary `-` (`parser.go` `expr`/`eAnd`/`eNot`/`eCmp`).
-- `%` (modulo) is implemented at the same precedence as `*` and `/` (`lexer.go`, `parser.go` `eMul`, `aritm` in `value.go`). Integer operands use integer remainder; other operands use `math.Mod`. A zero divisor is a `divisão por zero` error.
-- `/` between two integers is integer division and truncates toward zero (`7 / 2` is `3`, `-7 / 2` is `-3`) (`aritm`, `internal/report/value.go`). If either operand is a float the result is a float.
-- Every aggregate accepts `where`: `count(* where expr)` and `fn(expr where expr)` for `count`, `total`, `avg`, `min`, `max` (`parser.go` `ePrim`, `Interp.chama`). The `where` must be logical (see above).
+### Logical vs arithmetic typing
 
-### Truthiness and null normalization
-- `nil`, `0` (int64/float64), `""`, `false` are falsy; everything else (including non-zero dates) is truthy (`verdade`, `internal/report/value.go`). This runtime rule is still permissive; the strictness above is enforced only statically.
-- Comparing a `nil` against a typed value coerces the `nil` to that type's neutral value — `""` for string, zero `time.Time` for date, `0` otherwise (`normaliza`, `internal/report/value.go:35-60`) — before applying `=`/`<>`/`<`/`>`/`<=`/`>=`.
-- `bool` values are converted to `int64` 1/0 by `comparar` and `aritm` before use. An invalid or empty `bool` field is `nil`, so `is null` is true and `not f` is true.
-- `is null` / `is not null` treats `nil` and `""` (string) as null (`IsNullExpr` eval, `internal/report/interp.go:237-246`).
+`tipos.go`, run at end of `Parse`:
 
-### `bool` column printing
-- `print f` on a `bool` column prints `YES` or `NO`, and `***` when the value is null (`Interp.formata`, `Interp.ehColBool`, `internal/report/interp.go`). With a `using` mask the value is formatted as the number 1 or 0. Null prints `***` only for a direct column reference, not for a logical expression or a `set` variable.
-- Logical expressions that are not a bool column (for example `print n > 1`) print `1`/`0`.
+| Expression | Type |
+|---|---|
+| `and`, `or`, `not`, comparisons, `is [not] null`, bool column | logical |
+| `+ - * /`, negation, other columns, constants, calls | arithmetic |
+| `set` variable, unknown name | unknown (accepted anywhere) |
 
-### Print positioning
-- No `col` clause: continues right after the previous item plus 1 space (`it.fimCol + 1`); default start is column 1 (`internal/report/interp.go:589-593`).
-- `in col N` / `col N`: evaluates `N` as an expression, overrides position (`internal/report/interp.go:594-600`).
-- `centered`: computes `col = ceil((Width - Left - len(text)) / 2) + 1`, clamped to minimum 1 (`internal/report/interp.go:601-607`).
-- A string column printed without `using` pads to the `input`-declared length with spaces, not just to the value's own length (`larguraCol`, `internal/report/interp.go:548-563`, `582-588`).
+- `if` condition, `not` operand, `and`/`or` operands and `where` of aggregates must not be arithmetic; error text: "precisa ser uma expressão lógica ...".
+- Type of an expression is its last operation. Truth: nil, 0, 0.0, "", false are false (`verdade`).
+
+### Arithmetic and comparison
+
+- int op int stays int64; `/` and `%` between integers are integer ops; nil counts as 0 in int math.
+- Division or modulo by zero = error "divisão por zero".
+- Dates: date - date = days (int64); date ± N = date; other date ops error.
+- `string + string` concatenates.
+- `comparar`: nil replaced by neutral value of other side's type; string vs non-string compares as strings.
+- `is null` true for nil or "".
+
+### Sort and break cascade
+
+`Interp.ordena` / `Run` (`interp.go`):
+
+- Stable sort by each key; nil sorts first; `desc` flips.
+- On key change at level j: `after` for levels n-1..j (innermost first), then `before` for levels j..n-1 (outermost first), then `detail`.
+- `before report` fires on the first row; at end all `after` levels, then `after report`.
+- Without `before report`, `header` runs once before the first row.
+- Zero input rows = error "não há registros de entrada" (text mode).
+- Only named sort keys can host `before`/`after`.
+
+### Aggregates
+
+- `count`, `total`, `avg`, `min`, `max` only inside `after <key>` / `after report`, else error.
+- Scope: rows of the group (`after report` = all rows); optional `where`.
+- `count` counts rows incl. nulls; others skip nulls. `total` of all-int = int64, empty = 0; `avg` empty = 0; `min/max` empty = null.
+- Other functions: `dow` (0 = Sunday), `mdy(date, 0|1|2)` = month/day/year, `index(i, a, b, ...)`.
+
+### Pagination
+
+- Body capacity = length - top - bottom - footer height (`Interp.cap`); footer height measured by dry run on first row.
+- Auto page break when body full; `page [no footer][no header]` forces; `need n` breaks if fewer than n lines remain.
+- Footer placed at page bottom; page number starts at 1; `header` runs on each new page.
+- Default pads pages with blank lines to `length`; `--form-feed` joins pages with `\f` and does not pad.
+- `print`: line trimmed right, clipped to width - left margin; `centered` centers in width; no `in col` = 1 space after previous item; `no newline` keeps buffer; multi-line `'Nr'` masks spill to following lines in the same column.
+- String column without `using` pads to declared length.
+
+### Masks and formats
+
+- `using` numeric masks (`FmtMascara`, `format.go`): `# & * + - $ ( ) , .` or printf `%ld`, `%7.2f`; rounding half up. `'N'`/`'Nr'` on strings wraps by word (`QuebraTexto`). Numeric mask on string prints blank. No mask: int plain, float 2 decimals.
+- Dates (`dates.go`): `DATEFMT` (default `DD/MM/YY`) gives field order; 2-digit year >= `CENTURY_CUTOFF` (30) = 19xx else 20xx; `YYYY-MM-DD` always accepted. `date` prints 2-digit year, `ldate` 4.
+- `TIMEFMT` default `HH:MM`; `RADIXSEP` default `.`; `CURRSYM` default `$` (first char used).
+- `RPT_NOW` (`2006-01-02 15:04[:05]` or RFC3339) fixes `today`/`hour`.
+
+### CSV/JSON projection
+
+- `LinhasOrdenadas` returns sorted rows; no events, variables or pagination run (`cmd/rptgo/csv.go`, `json.go`).
+- Extend: add a case in the `--format` switch in `main.go` and a serializer taking `(w, *Script, []Row)`.
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — where each rule's implementation lives (`internal/report/*.go`).
-- [`api_contracts.md`](api_contracts.md) — how the script/data contract surfaces at the CLI boundary.
-- [`data_model.md`](data_model.md) — the `Row`/`Script` runtime shapes these rules operate on.
+- [`api_contracts.md`](api_contracts.md) — CLI flags and output formats
+- [`data_model.md`](data_model.md) — in-memory Row and Script structures
+- [`architecture.md`](architecture.md) — where each rule lives

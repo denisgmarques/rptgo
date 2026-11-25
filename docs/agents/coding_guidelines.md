@@ -4,30 +4,41 @@
 
 ## AS IS — Current state
 
-No lint config exists in the repo (`lint_tools: []`, no `.golangci.yml`, no CI) — every pattern below is enforced only by convention, verified by direct repetition across source files, not by a linter.
+No linter, formatter config, `.editorconfig` or pre-commit hook exists. Patterns below are observed in source, not tool-enforced.
 
-### 1. Rune-indexed string handling, never byte-index mixing
-- Rationale: script/data text can contain multi-byte UTF-8 (accents); mixing `strings.Index` byte offsets with rune-based loop counters corrupts positions.
-- Verified in: `internal/report/lexer.go:48-66` (`indexRunas`, with explicit comment "já bateu nisso uma vez, por isso o comentário"), `internal/report/interp.go:436-445` (`recortaRunas`), `internal/report/format.go` (`len([]rune(w))` word-wrap in `QuebraTexto`), `internal/report/parser.go` (string tokenizing over `[]rune(src)`).
-- No enforcement config — convention only, cross-checked by comment + repeated use.
+### 1. pt-BR identifiers, comments and messages
 
-### 2. Single `Error` type with source-line-annotated constructors
-- Rationale: script and data errors both need a "line N" + caret-annotated source snippet; one error type (`Error`) avoids duplicating that formatting per error site.
-- Verified in: `internal/report/errors.go:44-65` (`Error`, `Erro`, `ErroLinhaScript`, `ErroLinhaDados`), called from `internal/report/lexer.go:95-171`, `internal/report/parser.go` (`ps.errf`), `internal/report/interp.go:78-156` (`ErroLinhaDados` on type-conversion failures).
-- No enforcement config — convention only, cross-checked across lexer/parser/interp call sites.
+- Functions, types and user-facing errors are Portuguese: `analisaArgs`, `leRegistros`, `NovoInterp`, `LinhasOrdenadas`, `"divisão por zero"` (`main.go`, `interp.go`, `value.go`).
+- Match the existing language when editing code; docs under `docs/` are English (`.claude/rules/bc-harness.md`).
 
-### 3. Dynamic `Value` type with centralized coercion/comparison helpers
-- Rationale: the interpreter is dynamically typed (nil/int64/float64/string/time.Time/bool); rather than each call site writing its own type switch, all truthiness/comparison/arithmetic/float-coercion logic lives in one file.
-- Verified in: `internal/report/value.go` (`Value = any`, `verdade`, `normaliza`, `paraFloat`, `comparar`, `aritm`), reused by `internal/report/interp.go` (`it.ev`, `chama`, `ordena`) and `internal/report/format.go` (`FmtMascara` calling `paraFloat`).
-- No enforcement config — convention only, cross-checked by import/call graph.
+### 2. Dynamic Value with type switches
 
-### 4. Portuguese internal naming, English-flavored exported entry points
-- Rationale: the package models a pt-BR report-definition dialect (`README.md` is written in pt-BR); internal identifiers and comments stay in Portuguese to match the domain vocabulary (`quebra`, `agora`, `mascara`), while top-level exported functions the CLI calls (`Tokenize`, `Parse`, `NovoInterp`, `FmtMascara`, `ParseData`) are short, generic names.
-- Verified in: `internal/report/parser.go` (`pInput`, `pSort`, `pEvento`, exported `Parse`), `internal/report/interp.go` (`converte`, `verificaEventos`, `chave`, `ordena`, exported `NovoInterp`/`Run`), `internal/report/dates.go` (exported `ParseData`/`FmtData`, internal `dateFmt`).
-- No enforcement config — convention only, cross-checked across every file in `internal/report/`.
+- `Value = any` holds nil, int64, float64, string, time.Time or bool (`value.go`); nil is null.
+- Evaluation and serializers switch on concrete types (`Interp.ev`, `valorTexto` in `csv.go`, `valorJSON` in `json.go`); unexpected types return an error.
+- AST nodes are plain structs with a marker method (`exprNode`, `stmtNode` in `ast.go`).
+
+### 3. Single error type with line context
+
+- Errors come from `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`errors.go`); they append the source line and a `^` marker.
+- CLI prints `rptgo: <err>` to stderr and exits 1 (runtime) or 2 (bad args).
+
+### 4. Manual flag parsing, testable entrypoint
+
+- `executar(args, stdin, stdout, stderr) int` takes all I/O as parameters; `main` only calls `os.Exit` (`main.go`).
+- `analisaArgs` hand-parses flags (no `flag` package) to accept options and positionals in any order.
+
+### 5. Deterministic tests via env and golden files
+
+- Tests pin `RPT_NOW` and clear the 8 config vars with `t.Setenv` (`main_test.go`, `golden_test.go`).
+- Output baselines live in `internal/report/testdata/golden/`; regenerate with the `-update` flag.
+- Fixtures come from `examples/` (`examples_test.go`) and README snippets (`readme_test.go`).
+
+### 6. Hand-built serialization to keep order
+
+- `escreveJSON` assembles objects by hand to keep `input` column order and `YYYY-MM-DD` dates (`json.go` comment); `escreveCSV` uses `encoding/csv` (RFC 4180 quoting).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — file/layer boundaries these patterns live inside.
-- [`tech_stack.md`](tech_stack.md) — language/tooling context (no linter present).
-- [`domain_rules.md`](domain_rules.md) — the domain vocabulary driving naming choices.
+- [`architecture.md`](architecture.md) — layers these patterns apply to
+- [`tech_stack.md`](tech_stack.md) — test tooling
+- [`domain_rules.md`](domain_rules.md) — semantics behind the code

@@ -6,10 +6,58 @@
 
 ### Not applicable in this repository
 
-No HTTP surface exists: no route table, no controller/handler directory, no OpenAPI/GraphQL schema, no `net/http` server setup anywhere in the tree (`api_surface.present: false`, `api_surface.evidence: []`). The only process entry point is the CLI binary `cmd/rptgo/main.go` (`func main` → `executar`), which reads a script path and a data path/`-` from `os.Args`, and writes to stdout or a `-o` file — confirmed by the full argument-parsing switch in `analisaArgs` (`cmd/rptgo/main.go:173-224`), which has no socket/listener code. There is also no queue/broker/cron client (`async.present: false`, `async.evidence: []`), so no message-format section applies either.
+No HTTP server, router, handler, OpenAPI/proto schema, queue consumer or network client exists: `go.mod` has no dependencies and no source imports `net/http`. The only external contract is the CLI below.
+
+### CLI contract
+
+```
+rptgo [options] script.rp [input.txt | -]
+```
+
+| Flag | Values | Default | Effect |
+|---|---|---|---|
+| `-o`, `--saida`, `--output` | file path | stdout | Write output to file |
+| `--encoding` | `utf-8`, `latin-1` (`latin1`, `iso-8859-1`), `cp850` | `utf-8` | Script, data and output; unknown value = utf-8; unmappable char = `?` |
+| `--header` | `auto`, `sim`, `nao` | `auto` | Skip first data line as header |
+| `--form-feed` | switch | off | Join pages with `\f`, no blank padding |
+| `--newline` | `auto`, `lf`, `crlf` | `auto` (crlf on windows) | Line ending |
+| `--format` | `text`, `csv`, `json` | `text` | Output format; other value = error |
+| `--strict` | switch | off | Multi-line `/* */` comments rejected |
+| `--check`, `-r` | switch | off | Syntax check only |
+
+- Input omitted or `-` = stdin.
+- Unknown `-x` option, missing flag value, or no script = exit 2. `--format csv|json` with `--form-feed` = exit 2 (`rptgo: --format csv não pode ser combinado com --form-feed`).
+- File, parse, data or runtime error = exit 1, message `rptgo: <msg>` on stderr.
+- Success = exit 0. `--check` prints `No syntax errors were found in the report script.`
+- Env config: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+
+### Output formats
+
+- `text`: paginated fixed-column report.
+- `csv`: header row of `input` names, comma delimiter, RFC 4180 quoting, one row per record in `sort` order; null = empty; dates `YYYY-MM-DD`; numbers shortest decimal; bool `true`/`false`.
+- `json`: array, one object per line, keys in `input` order; null = `null`; empty input = `[]`.
+
+JSON from `--format json` on `internal/report/testdata/golden/misto.rp` + `misto.dat`:
+
+```json
+[
+{"id":1,"nome":"Zeca","nasc":"1985-03-05","cadast":"2020-01-15","ativo":true,"saldo":150.5},
+{"id":12,"nome":"Lia","nasc":"1944-04-04","cadast":"2011-11-11","ativo":true,"saldo":2},
+{"id":11,"nome":"Kika","nasc":"1933-03-03","cadast":"2012-08-08","ativo":false,"saldo":1}
+]
+```
+
+CSV from `examples/relatorio-vendas-regiao` (README.md):
+
+```
+regiao,vendedor,valor
+Leste,Diego Alves,450.25
+Leste,Fabio Neri,780
+Norte,Bruno Lima,980
+```
 
 ## Related documents
 
-- [`project_overview.md`](project_overview.md) — macro flow of the CLI invocation this repo actually exposes.
-- [`architecture.md`](architecture.md) — layer that owns argument parsing and I/O (`cmd/rptgo/main.go`).
-- [`domain_rules.md`](domain_rules.md) — the script/data contract the CLI enforces instead of an HTTP contract.
+- [`project_overview.md`](project_overview.md) — consumers and flow
+- [`domain_rules.md`](domain_rules.md) — semantics behind outputs
+- [`data_model.md`](data_model.md) — in-memory structures

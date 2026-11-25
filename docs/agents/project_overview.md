@@ -5,38 +5,42 @@
 ## AS IS — Current state
 
 ### Purpose
-`rptgo` reads a `.rp` report-definition script plus a flat delimited data file and produces a paginated, fixed-column text report, as implemented in `internal/report/interp.go` (`Interp.Run`) and driven by the CLI in `cmd/rptgo/main.go`.
+
+`rptgo` is a Go CLI that interprets fixed-column report scripts (`.rp`) over delimited input data and emits a paginated text report, CSV, or JSON.
 
 ### Business problem
-- Without it, reproducing columnar reports from fixed-width legacy systems (the `input`/`sort`/`before`/`after`/`detail` dialect described in `README.md:8-12`) requires the original proprietary report engine; `rptgo` is "uma implementação independente desse dialeto" (`README.md:11`).
-- Without the break-cascade engine (`Interp.Run`, `internal/report/interp.go:800-856`), multi-level subtotals (`total`/`avg`/`min`/`max` per break) would need manual grouping logic per report.
-- Without the `using` mask engine (`FmtMascara`, `internal/report/format.go:66-200`), numeric/currency column alignment (`#&*+-$(),.` notation and printf-style `%7.2f`) would need per-report formatting code.
+
+- Implements a declarative report language (`input`/`sort`/`before`/`after`/`detail` sections, `print ... in col N using 'mask'`) without the original product (README.md).
+- Without it: column-exact layouts, cascading control-break totals and per-page header/footer for continuous-form printers need hand-written code.
+- Independent implementation, built from public docs and input/output behavior tests (README.md).
 
 ### Consumers and integrations
+
 | System | Role |
 |---|---|
-| Shell / CI pipeline | invokes the `rptgo` binary as `rptgo [opções] script.rp [entrada.txt \| -] > relatorio.txt` (`README.md:17`, `cmd/rptgo/main.go:37`) |
-| `.rp` script file | user-authored report definition, read from disk (`cmd/rptgo/main.go:53`) |
-| Data file or stdin | delimited records, read from a named file or `-` for stdin (`cmd/rptgo/main.go:75-84`) |
-| Output file or stdout | final report text, written via `-o/--saida` or stdout (`cmd/rptgo/main.go:111-116`) |
-| OS environment | `RPT_NOW`, `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM` read via `os.LookupEnv`/`os.Getenv` (`internal/report/config.go`, `internal/report/dates.go`, `internal/report/parser.go:110-114`) |
+| Shell / operator | Runs `rptgo [options] script.rp [input.txt \| -]` (`cmd/rptgo/main.go`) |
+| Files / stdin / stdout | Script, data and report I/O; `-o` writes a file |
+| Dot-matrix / form printers | Target of `--encoding cp850`, `--form-feed`, `--newline crlf` |
+| Downstream CSV/JSON tools | Consume `--format csv\|json` output (`cmd/rptgo/csv.go`, `json.go`) |
+| Environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
 
 ### Macro flow
-1. CLI parses args (`analisaArgs`, `cmd/rptgo/main.go:173-224`) — script path, optional data path, `-o`, `--check`, `--header`, `--form-feed`, `--newline`, `--strict`, `--encoding`.
-2. Reads and decodes the script file (`decodificar`, `cmd/rptgo/main.go:58`), registers it for error context (`report.DefFonteScript`).
-3. Tokenizes (`report.Tokenize`, `internal/report/lexer.go:68`) and parses (`report.Parse`, `internal/report/parser.go:98`) into a `Script` AST; `--check` stops here and prints "No syntax errors were found..." (`cmd/rptgo/main.go:70-73`).
-4. Reads data (file or stdin), splits into records on the configured separator, strips an optional header row (`leRegistros`, `cmd/rptgo/main.go:229-250`).
-5. `report.NovoInterp` type-converts every field per `input` column type and validates break/variable names (`internal/report/interp.go:50-158`).
-6. `Interp.Run` sorts rows, measures footer height with a dry run, then walks rows emitting `before report` → per-level `before`/`after` cascades → `detail` → `after report`, paginating via `novaPagina`/`fechaPagina` (`internal/report/interp.go:739-873`).
-7. CLI applies newline conversion (`--newline`) and output encoding, then writes to stdout or the `-o` file (`cmd/rptgo/main.go:106-116`).
+
+1. `main` calls `executar` with args, stdin, stdout, stderr.
+2. `analisaArgs` parses flags; bad args exit 2.
+3. Read script file, decode per `--encoding`, `report.Tokenize` then `report.Parse` (includes static logical/arithmetic type check). `--check` stops here with exit 0.
+4. Read data (file or `-` stdin), decode, `leRegistros` splits lines by the script separator (default `|`) and drops a header line (`--header`).
+5. `report.NovoInterp` converts records to typed `Row`; wrong field count or bad value fails ("phase error").
+6. `--format text`: `Interp.Run` sorts, fires break/detail events, paginates. `csv`/`json`: `Interp.LinhasOrdenadas` + serializer, no event sections.
+7. Apply CRLF if requested, encode, write to stdout or `-o` file.
 
 ### Out of scope
-- CSV/JSON output — "Saída alternativa em CSV/JSON (hoje só o texto fixo, página a página)" (`README.md:104`).
-- Printer code pages beyond utf-8/latin-1 (e.g. CP850) — `README.md:105-106`, confirmed by `decodificar`/`codificar` only handling `utf-8` and `latin-1` (`cmd/rptgo/main.go:123-149`).
-- Reading data directly from a database or environment blocks — "este programa lê um arquivo de dados já pronto, não uma fonte" (`README.md:107-108`).
+
+- No HTTP/network API, no database (stdlib only, file/stdin/stdout).
+- `--format csv|json` ignores `width`/`length`/margins and all event sections (README.md).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — module layout and layer responsibilities.
-- [`domain_rules.md`](domain_rules.md) — report-language semantics (breaks, masks, types).
-- [`api_contracts.md`](api_contracts.md) — CLI surface and script/data contract.
+- [`architecture.md`](architecture.md) — layout and layers
+- [`domain_rules.md`](domain_rules.md) — language semantics
+- [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, output formats

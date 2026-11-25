@@ -5,33 +5,35 @@
 ## AS IS — Current state
 
 ### Runtime and language
-- **Language**: Go 1.25 (`go.mod:3` — `go 1.25`)
-- **Framework**: No primary framework — plain stdlib CLI, no web/service framework observed (`stack.framework`)
 
-| Item | Value | Evidence |
-|---|---|---|
-| Language | Go 1.25 | `go.mod:3` |
-| Module | `rptgo` | `go.mod:1` |
-| Framework | none | no `go.sum`, no `require` block in `go.mod` |
-| Package manager | Go modules | `go.mod` present, zero `require` directives |
-| Runtime | Go toolchain binary, no container/VM config | no `Dockerfile`, no CI manifest found in repo tree |
-| Build | no Makefile / CI script found | `commands.build: "none found"` |
+| Item | Value |
+|---|---|
+| Runtime | Native Go binary (`go build -o rptgo ./cmd/rptgo`) |
+| Package manager | Go modules, module `rptgo`; no `go.sum`, no external deps |
+| Lint / format config | None |
+| CI / Makefile | None |
+
+- **Language**: Go 1.25 (`go.mod`)
+- **Framework**: No primary framework (standard library only: `bufio`, `bytes`, `encoding/csv`, `encoding/json`, `fmt`, `io`, `math`, `os`, `regexp`, `runtime`, `sort`, `strconv`, `strings`, `time`)
 
 ### Tests
-| Aspect | Value | Evidence |
-|---|---|---|
-| Runner | not found | zero `*_test.go` files in repo (`tests.runner`) |
-| Assertion lib | not found | no test files to import one |
-| Mock lib | not found | no test files, no mock package imports |
-| Coverage tool | not found | no coverage config/script |
-| Test dirs | not found | no `testdata/` or `_test` directory layout |
-| Manual verification | implemented AS IS per inspector note: "testado manualmente (não há testes automatizados ainda)" | inspector notes |
+
+| Item | Value |
+|---|---|
+| Runner | Go `testing` (`go test ./...`) |
+| Assertions | Standard library only |
+| Mocks | None |
+| Coverage tool | None (`.gitignore` lists `coverage.txt`, `coverage.html`) |
+| Golden baselines | `internal/report/testdata/golden/`, regenerated with `-update` (`golden_test.go`) |
+| Benchmark | `BenchmarkConverte200k` (`bench_test.go`): 200k rows, B/op, allocs/op, `retido-B` |
+| Other suites | `examples_test.go`, `readme_test.go`, `cp850_test.go`, `saida_test.go`, `bool_test.go` |
 
 ### External integrations
-Not applicable: `dependencies.runtime` is empty and no client library imports exist beyond Go stdlib (`bufio`, `fmt`, `io`, `os`, `runtime`, `strings`, `math`, `sort`, `strconv`, `regexp`, `time` — confirmed by `import` blocks in `internal/report/*.go` and `cmd/rptgo/main.go`).
+
+None. File, stdin and stdout only.
 
 ## Related documents
 
-- [`dependencies.md`](dependencies.md) — full dependency/env-var inventory.
-- [`architecture.md`](architecture.md) — how the stdlib-only codebase is laid out.
-- [`coding_guidelines.md`](coding_guidelines.md) — patterns enforced inside this stack.
+- [`architecture.md`](architecture.md) — package layout
+- [`dependencies.md`](dependencies.md) — dependency inventory
+- [`coding_guidelines.md`](coding_guidelines.md) — code conventions

@@ -4,20 +4,29 @@
 
 ## AS IS — Current state
 
-`go.mod` declares only `module rptgo` / `go 1.25`, with no `require` directives and no `go.sum` (`go.mod:1-3`). All imports resolve to the Go standard library: `bufio`, `fmt`, `io`, `os`, `runtime`, `strings` (`cmd/rptgo/main.go:10-19`), `math`, `sort`, `strconv`, `strings`, `time` (`internal/report/interp.go:3-9`), `regexp`, `strconv`, `strings` (`internal/report/lexer.go:3-7`), `fmt`, `regexp`, `strconv`, `strings` (`internal/report/format.go:3-8`), `fmt`, `time` (`internal/report/value.go:3-6`), `os`, `time` (`internal/report/config.go:3-6`).
-
 ### External services
-No external services. No HTTP clients, no database drivers, no third-party SDKs found in any import block (`dependencies.runtime: []`).
+
+| Service | Purpose |
+|---|---|
+| None | No network, database or API calls in source |
 
 ### Internal libraries
+
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | the entire interpreter core (lexer, parser, AST, execution engine, formatting, dates, value semantics, errors) — the only first-party non-main package, imported by `cmd/rptgo/main.go:18` |
+| `rptgo/internal/report` | Lexer, parser, interpreter, formatting (imported by `cmd/rptgo`) |
 
 ### Shared infrastructure
-None. No queue, no cache, no observability/metrics/logging library beyond `fmt.Fprintln` to stderr (`cmd/rptgo/main.go`, e.g. lines 40, 55, 62) — confirmed by the zero-length `dependencies.runtime`/`dependencies.dev` lists and the absence of any infra config file (`Dockerfile`, CI manifest, `.env`) in the repo tree.
+
+| Item | Use |
+|---|---|
+| Go toolchain 1.25 (`go.mod`) | Build and test; stdlib only, no `go.sum` |
+| Process environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
+| Filesystem / stdin / stdout | Script, data and report I/O |
+
+No queues, caches, CI or observability tooling.
 
 ## Related documents
 
-- [`tech_stack.md`](tech_stack.md) — language/runtime this stdlib-only dependency set runs on.
-- [`architecture.md`](architecture.md) — where the single internal package (`internal/report`) sits in the layout.
+- [`tech_stack.md`](tech_stack.md) — runtime and tests
+- [`architecture.md`](architecture.md) — integration points

@@ -15,89 +15,111 @@
 
 | Command | Purpose |
 |---|---|
-| build: none found | no `Makefile`, no CI (`.github/`, `.gitlab-ci.yml`), no manifest script in repo root |
-| test: none found | no `*_test.go` files anywhere in the repo; no CI/test script |
-| lint: none found | no `.golangci.yml` or other lint config; no CI |
-| coverage: none found | no coverage tooling configured |
+| `go build -o rptgo ./cmd/rptgo` | Build the CLI binary (README.md, "Primeiros passos") |
+| `./rptgo [opções] script.rp [entrada.txt \| -] > relatorio.txt` | Run a report script (README.md) |
+| `./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt` | Run bundled example (README.md) |
+| `go test ./internal/report -run Golden -update` | Regenerate golden baselines (see `internal/report/golden_test.go`) |
 
-Module is `rptgo`, Go 1.25 (`go.mod`), stdlib-only (no `require` entries, no `go.sum`).
+- Lint: none configured. Coverage: none configured (`.gitignore` lists `coverage.txt`, `coverage.html`, `*.prof`).
+- Tests: Go `testing` package, stdlib assertions, no mocks. `go test ./...` and `go vet ./...` run them but are not documented in the repo.
+- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go` (200k rows).
+- No CI, no Makefile.
+
+Test locations:
+
+| Dir | Files |
+|---|---|
+| `cmd/rptgo/` | `main_test.go`, `saida_test.go`, `cp850_test.go`, `examples_test.go`, `readme_test.go` |
+| `internal/report/` | `interp_test.go`, `bool_test.go`, `golden_test.go`, `bench_test.go`, `gerador200k_test.go` |
+| `internal/report/testdata/golden/` | `*.rp`, `*.dat`, `*.txt`, `misto_formfeed.txt` baselines |
 
 ## 2. Code Style & Project Conventions
 
-- No lint config exists (`lint_tools: []`) — the conventions below are observed in the
-  existing code, not enforced by tooling.
-- Identifiers, comments, and doc strings are Portuguese (pt-BR) throughout, e.g.
-  `analisaArgs`, `leRegistros`, `decodificar`, `cfg`, `agora` — match this when editing
-  `cmd/rptgo/main.go` or any file under `internal/report/`.
-- Package split: `cmd/rptgo` holds CLI argument parsing and I/O only; the interpreter
-  engine (lexer, parser, AST, execution, formatting, dates, value types) lives in
-  `internal/report/` and is not importable from outside this module (Go `internal/`
-  visibility rule, enforced by the compiler).
-- One concern per file inside `internal/report/`: `lexer.go` (tokenizer), `parser.go`
-  (recursive-descent parser), `ast.go` (node types), `interp.go` (execution engine),
-  `format.go` (`using` masks), `dates.go` (date parsing/formatting), `value.go` (dynamic
-  `Value` type), `config.go` (env config + clock), `errors.go` (source-line error context).
-- See `docs/agents/coding_guidelines.md` for the full convention writeup.
+- No linter or formatter config. Conventions below are observed, not tool-enforced.
+- Module `rptgo`, Go 1.25 (`go.mod`), stdlib only, no `go.sum`.
+- Identifiers and code comments in pt-BR (`analisaArgs`, `leRegistros`); match when editing.
+- Specs and docs in English (`.claude/rules/bc-harness.md`).
+- `cmd/rptgo/` = CLI wiring and I/O: `main.go`, `csv.go`, `json.go`, `cp850.go`.
+- `internal/report/` = interpreter; `internal/` visibility enforced by Go compiler.
+- One concern per file in `internal/report/`:
+
+| File | Concern |
+|---|---|
+| `lexer.go` | tokenizer |
+| `parser.go` | parser; runs static type check from `tipos.go` at end of `Parse` |
+| `ast.go` | node types |
+| `interp.go` | sort, cascading breaks, pagination |
+| `value.go` | typed values, bool, arithmetic |
+| `tipos.go` | static logical-vs-arithmetic check |
+| `format.go` | `using` masks |
+| `dates.go` | date parsing/formatting |
+| `errors.go` | source-line error context |
+| `config.go` | env config |
+
+- Full guide: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
 
-- Comment and identifier language in this codebase is Portuguese (pt-BR); keep new code
-  under `cmd/rptgo` and `internal/report` consistent with that, since every existing
-  identifier and comment uses it.
-- No test suite exists yet (no `*_test.go` found anywhere) — say so explicitly when asked
-  about test coverage for `internal/report` instead of assuming hidden coverage.
+- Write specs and docs in English; keep pt-BR only for verbatim identifiers, flag values, quoted messages (`.claude/rules/bc-harness.md`).
+- Use bc-harness workflows for changes (`.claude/rules/bc-harness.md`).
+- State plainly that no CI or linter exists when asked about checks.
 
 ### Never in this repository
 
-- Never import `rptgo/internal/report` from a package outside the `rptgo` module — Go's
-  `internal/` import-visibility rule blocks this at compile time (enforced by the
-  toolchain; evidenced by the `internal/` directory layout under module `rptgo` in
-  `go.mod`).
+- Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); they are overwritten on re-run (`.claude/rules/bc-harness.md`).
+- Never import `rptgo/internal/report` from outside module `rptgo`; the Go compiler rejects it.
+- Never combine `--format csv|json` with `--form-feed`; the CLI exits with code 2.
 
 ## 4. Setup, Troubleshooting and Tips
 
-Prereqs: Go 1.25 toolchain (`go.mod` declares `go 1.25`). No external dependencies, no
-`go.sum` to fetch.
-
-Run the built binary against a script and a data file (from `README.md`):
+Prereq: Go 1.25 toolchain. No external dependencies.
 
 ```sh
-rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
+go build -o rptgo ./cmd/rptgo
+./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
 ```
 
-Relevant flags (`README.md`): `-o/--saida <arquivo>`, `--check` (syntax-only), `--header
-auto|sim|nao`, `--form-feed`, `--newline auto|lf|crlf`, `--strict`, `--encoding
-utf-8|latin-1`.
+Flags (`cmd/rptgo/main.go`):
 
-Config is read from the environment (`README.md`, `internal/report/config.go`,
-`internal/report/dates.go`): `DATEFMT` (default `DD/MM/YY`), `CENTURY_CUTOFF` (default
-`30`), `TIMEFMT` (default `HH:MM`), `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`,
-and `RPT_NOW` (e.g. `2026-11-24 17:47`) to pin the clock for reproducible runs.
+| Flag | Values |
+|---|---|
+| `-o` / `--saida` / `--output` | output file |
+| `--encoding` | `utf-8`, `latin-1`, `cp850` |
+| `--header` | `auto`, `sim`, `nao` |
+| `--form-feed` | text format only |
+| `--newline` | `auto`, `lf`, `crlf` |
+| `--format` | `text`, `csv`, `json` |
+| `--strict` | strict parsing (block comments on one line) |
+| `--check` / `-r` | syntax check |
+
+Env vars (`internal/report/config.go`, `dates.go`): `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` (pins the clock for reproducible runs).
 
 | Symptom | Check |
 |---|---|
-| Need CSV/JSON output instead of fixed-width text | not supported — only paginated fixed-width text output exists (`README.md`, "O que ainda não está aqui") |
-| Garbled bytes with `--encoding` on a dot-matrix code page (e.g. CP850) | not supported — `--encoding` only implements `utf-8` and `latin-1` (direct byte<->rune mapping, no table); other bytes are treated as utf-8 |
-| Script needs to read a live database/source | out of scope — `rptgo` only reads an already-prepared delimited data file (stdin or a file argument) |
-| Multi-line `/* */` comment behaves differently than expected | by default multi-line block comments are accepted; pass `--strict` to require opening and closing on the same line (`README.md`) |
+| Exit code 2 | `--format csv\|json` combined with `--form-feed` |
+| Multi-line `/* */` comment rejected | `--strict` requires open and close on same line |
+| Golden test fails after intended output change | rerun `go test ./internal/report -run Golden -update`, review diff |
+| Time/date output differs between runs | set `RPT_NOW` |
 
 ## 5. References
 
 | Doc | Purpose |
 |---|---|
-| `README.md` | Usage, CLI flags, `.rp` script language description, env config vars, project structure (pt-BR) |
+| `README.md` | Usage, flags, getting started, script language, structure (pt-BR) |
+| `.claude/rules/bc-harness.md` | Project rules: bc-harness workflow, English docs |
+| `examples/` | `relatorio-vendas-regiao/`, `relatorio-estoque-categoria/` (`relatorio.rp` + `dados.txt`) |
 
 ## 6. Agent Documentation
 
 | File | Content |
 |---|---|
-| `docs/agents/project_overview.md` | What `rptgo` is: CLI interpreter for a fixed-column report-definition language, scope and non-goals |
-| `docs/agents/architecture.md` | Package boundaries: `cmd/rptgo` CLI shell vs. `internal/report` lexer/parser/AST/interp pipeline |
-| `docs/agents/tech_stack.md` | Go 1.25 toolchain, stdlib-only dependency graph, no framework/runtime/container config |
-| `docs/agents/coding_guidelines.md` | Naming (pt-BR identifiers), per-file responsibilities, current lint/test status |
-| `docs/agents/domain_rules.md` | `.rp` language semantics: sections, break cascade, `using` masks, functions, column types |
-| `docs/agents/api_contracts.md` | CLI flags/exit-code contract of `cmd/rptgo/main.go` — no HTTP/GraphQL API exists |
-| `docs/agents/data_model.md` | Input record model: delimited fields, column types, the dynamic `Value` type |
-| `docs/agents/dependencies.md` | Dependency inventory: stdlib-only, no `go.sum`, no third-party packages |
+| `docs/agents/project_overview.md` | What `rptgo` is, scope, non-goals |
+| `docs/agents/architecture.md` | `cmd/rptgo` CLI vs `internal/report` pipeline |
+| `docs/agents/tech_stack.md` | Go 1.25, stdlib-only, no framework or container |
+| `docs/agents/coding_guidelines.md` | Naming, per-file responsibilities, lint/test status |
+| `docs/agents/domain_rules.md` | `.rp` language semantics: breaks, `using` masks, column types |
+| `docs/agents/api_contracts.md` | CLI flags and exit-code contract; no HTTP API |
+| `docs/agents/data_model.md` | Input record model, column types, `Value` type |
+| `docs/agents/dependencies.md` | Dependency inventory: none |
 
 _End of AGENTS.md_

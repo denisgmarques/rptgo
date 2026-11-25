@@ -5,48 +5,51 @@
 ## AS IS — Current state
 
 ### Style
-Single-binary CLI with a layered interpreter core: lexer → parser/AST → execution engine, each in its own file under `internal/report/` (`internal/report/lexer.go`, `parser.go`, `ast.go`, `interp.go`), fronted by a thin `cmd/rptgo/main.go` that owns all I/O — no web/service framework (`stack.framework: "none observed"`).
+
+Two-package Go module `rptgo`: thin CLI (`cmd/rptgo`) over an interpreter library (`internal/report`) with a lexer, parser, AST and tree-walking interpreter pipeline.
 
 ### Directory layout
+
 ```
-.
-├── cmd/
-│   └── rptgo/
-│       └── main.go           # CLI: arg parsing, file/stdin reading, encoding, exit codes
-├── internal/
-│   └── report/                # core interpreter package, no exported sub-packages
-│       ├── lexer.go           # Tokenize(): runes -> []Token (TokNum/TokStr/TokData/TokRep/TokID/TokOp/TokEOF)
-│       ├── parser.go          # Parse(): recursive-descent, []Token -> *Script AST
-│       ├── ast.go             # Expr/Stmt node types, Script/InputCol/SortKey/EventKey
-│       ├── interp.go           # Interp: row typing, sort, break cascade, pagination, eval
-│       ├── format.go          # FmtMascara/QuebraTexto: 'using' mask engine
-│       ├── dates.go           # ParseData/FmtData: DATEFMT-driven date parse/format
-│       ├── value.go           # Value (any), truthiness, comparar(), aritm()
-│       ├── config.go          # cfg()/agora(): env-var reads + RPT_NOW clock override
-│       └── errors.go          # Error type, line-annotated error constructors
-├── go.mod                     # module rptgo, go 1.25, zero dependencies
-└── README.md                   # usage + .rp language reference (pt-BR)
+cmd/rptgo/                CLI: main.go (args, I/O, encodings), csv.go, json.go, cp850.go (256-entry table), *_test.go
+internal/report/          interpreter library
+  lexer.go                Tokenize (comments, strict single-line comments)
+  parser.go               Parse -> Script; defaults, sections, statements
+  ast.go                  Expr/Stmt nodes, InputCol, SortKey, EventKey, Script
+  tipos.go                static logical-vs-arithmetic check (verificaTipos)
+  interp.go               Interp: row conversion, evaluation, sort, break cascade, pagination
+  value.go                Value (any), verdade, comparar, aritm, normalizaBool
+  format.go               FmtMascara (using masks), QuebraTexto
+  dates.go                ParseData, FmtData, horaAtual
+  config.go               cfg() env reader, agora() (RPT_NOW)
+  errors.go               Error type, line-context messages
+  testdata/golden/        *.rp, *.dat, *.txt baselines
+examples/                 relatorio-vendas-regiao/, relatorio-estoque-categoria/ (relatorio.rp + dados.txt)
+docs/agents/              generated docs
 ```
 
 ### Layer responsibilities
+
 | Layer | Owns | Does NOT own |
 |---|---|---|
-| `cmd/rptgo/main.go` | arg parsing, file/stdin/stdout I/O, encoding conversion (`decodificar`/`codificar`), newline conversion, exit codes, header-row detection (`leRegistros`) | script syntax, report semantics, formatting |
-| `internal/report/lexer.go` | turning script source into tokens, comment handling (`--strict` single-line rule), string/number/date-literal/repeat-literal recognition | statement/expression grammar |
-| `internal/report/parser.go` | recursive-descent grammar for sections (`input`/`sort`/`width`/margins/`separator`), events (`before`/`after`/`header`/`footer`/`detail`), statements, expression precedence (`or > and > not > cmp > + - > * / > unary`) | execution, type coercion, formatting |
-| `internal/report/ast.go` | AST node shapes (`Expr`, `Stmt`, `Script`, `InputCol`, `SortKey`, `EventKey`) | behavior — pure data |
-| `internal/report/interp.go` | row type conversion, sort, break-cascade dispatch, pagination/footer-height measurement, expression evaluation, aggregate functions (`count`/`total`/`avg`/`min`/`max`) | mask syntax, date parsing |
-| `internal/report/format.go` | `using` mask rendering (own notation `#&*+-$(),.` and printf-style `%7.2f`), word-wrap for text masks | row iteration, break logic |
-| `internal/report/dates.go` | `DATEFMT`/`CENTURY_CUTOFF`/`TIMEFMT`-driven date/time parse and format | numeric formatting |
-| `internal/report/value.go` | dynamic `Value` type, truthiness, comparison/arithmetic with nil-normalization | I/O, parsing |
-| `internal/report/config.go` | env-var reads (`cfg`), clock abstraction (`agora`, `RPT_NOW` override) | business rules |
-| `internal/report/errors.go` | `Error` type, source-line-annotated messages for script/data errors | — |
+| `cmd/rptgo` | Flags, file/stdin/stdout I/O, encoding (utf-8, latin-1, cp850), newline, record splitting, CSV/JSON serialization, exit codes | Script semantics, typing, pagination |
+| Lexer/parser (`lexer.go`, `parser.go`, `ast.go`) | Tokens, `Script` tree, defaults (width 80, length 66, margins 2, separator `\|`) | Evaluation |
+| Type check (`tipos.go`) | Reject arithmetic where logical required | Runtime values |
+| Interpreter (`interp.go`, `value.go`) | Typing of input, expression eval, sort, breaks, aggregates, pages | File I/O, encodings |
+| Formatting (`format.go`, `dates.go`) | `using` masks, word wrap, date/time text | Layout/columns |
+| `config.go` | Env config and fixed clock | Parsing |
 
 ### External integration points
-Not applicable: no network clients, no DB drivers, no message brokers found anywhere in `internal/report/*.go` or `cmd/rptgo/main.go` (`dependencies.runtime: []`, `persistence.present: false`, `async.present: false`). The only external surface is the OS environment (env vars) and the filesystem/stdio, both already covered as consumers in `project_overview.md`.
+
+| System | Client/config | Notes |
+|---|---|---|
+| Process environment | `os.LookupEnv` in `config.go`, `parser.go` | 9 variables; `RPT_NOW` pins the clock |
+| Filesystem / stdin / stdout | `os.ReadFile`, `os.Open`, `os.Create` in `main.go` | Whole input read into memory (`io.ReadAll`) |
+
+No async, queues or network clients.
 
 ## Related documents
 
-- [`project_overview.md`](project_overview.md) — macro flow from CLI invocation to report output.
-- [`tech_stack.md`](tech_stack.md) — language/runtime/dependency inventory backing this layout.
-- [`domain_rules.md`](domain_rules.md) — semantics implemented inside `internal/report/interp.go`.
+- [`project_overview.md`](project_overview.md) — purpose and macro flow
+- [`domain_rules.md`](domain_rules.md) — interpreter semantics
+- [`tech_stack.md`](tech_stack.md) — runtime and tests
