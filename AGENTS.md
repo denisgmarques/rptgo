@@ -16,82 +16,75 @@
 | Command | Purpose |
 |---|---|
 | `go build -o rptgo ./cmd/rptgo` | Build CLI binary |
-| `./rptgo [opções] script.rp [dados.txt \| -]` | Run a report script |
-| `./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt` | Run bundled example |
-| `./rptgo --help` | Print CLI help |
-| `go test ./...` | Run all tests (Go convention; no CI or Makefile defines it) |
+| `go test ./...` | Run all tests |
 | `go test ./internal/report -run Golden -update` | Regenerate golden baselines (`internal/report/golden_test.go`) |
-| `scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (needs Go, a headless browser, `pdftoppm`; pins `RPT_NOW`) |
+| `bash scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (sets `RPT_NOW="2026-06-30 09:00"`; needs Go, Chrome, `pdftoppm`) |
 
 - Test runner: Go stdlib `testing`.
-- `cmd/rptgo/readme_test.go` verifies README blocks: `TestReadmeBlocosConferem`, `TestReadmeImagensExistem`.
-- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go`.
+- `cmd/rptgo/readme_test.go` verifies marked code blocks in `README.md`, `SAIDA-HTML.md`, `examples/*/README.md`, and `REFERENCIA.md` examples, plus README links and images.
+- Benchmarks: `internal/report/bench_test.go`, `cmd/rptgo/bench_entrada_test.go`.
 - Lint: none configured.
 - Coverage: none configured.
 
 ## 2. Code Style & Project Conventions
 
-- Language: Go 1.25 (`go.mod`, module `rptgo`). No external deps, no `go.sum`.
-- Identifiers and code comments: pt-BR.
-- Docs and specs: English (`.claude/rules/bc-harness.md`).
-- `internal/report` holds the interpreter (lexer, parser, ast, tipos, interp, value, format, dates, config, errors).
-- `cmd/rptgo` holds CLI (package `main`): option parsing, writers (text, csv, json, html, box), encodings, help.
-- Golden baselines live in `internal/report/testdata/golden/`.
-- README blocks marked with `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` must match files and command output (`cmd/rptgo/readme_test.go`).
-- Named expressions `<name> expr` in `sort` and `print` items act as columns; cycles and conflicts with columns/set variables are errors (`tipos.go`, `verificaNomes`).
-- `sort a, b` takes break-level names from columns; explicit `<name>` only for computed keys.
-- Env config: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- Language: Go 1.25 (`go.mod`, module `rptgo`). Stdlib only, no `go.sum`.
+- Identifiers and code comments under `cmd/` and `internal/`: pt-BR.
+- Docs and specs: English (`.claude/rules/bc-harness.md`). `README.md`, `REFERENCIA.md`, `SAIDA-HTML.md` are pt-BR today.
+- `internal/report`: lexer, parser, ast, interp, value, format, dates, golden tests.
+- `cmd/rptgo` (package `main`): flags, input readers, output formats, tests.
+- Golden baselines: `internal/report/testdata/golden/`.
+- Doc blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` (README, SAIDA-HTML, example READMEs) and `<!-- script -->`, `<!-- data -->`, `<!-- output -->`, `<!-- error -->` (REFERENCIA) must match real files and output (`cmd/rptgo/readme_test.go`).
+- Header runs on page 1 right after `before report`; `--strict` restores the old rule and forces `/* */` comments onto one line (`Interp.Strict`, `internal/report/interp.go`, set from `cmd/rptgo/main.go`).
+- Env config: `RPT_NOW`, `TRIADSEP`, `RADIXSEP`, `CURRSYM`, `DATEFMT`, `TIMEFMT`, `CENTURY_CUTOFF`, `WIDTH`, `PAGELN`, `SEPARATOR`.
 - `RPT_NOW` fixes the clock.
-- Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage or option values.
+- Input sources: `--input delimited|csv|json`; `--input-delimiter`; `--input-decimal . , auto`.
+- Column type `time` exists.
 - Language behavior is pinned by tests under `internal/report` and `cmd/rptgo`.
-- Input sources (`cmd/rptgo/entrada.go`): delimited (default), CSV (standard quoting, BOM, CRLF), JSON (array of objects or one object per line; keys match columns case-insensitively; nested values and columns missing from every record are errors).
-- `--input-delimiter auto` (default for `--input csv`) tries `;` `,` tab `|` over the first 30 records and picks the one yielding the script's input column count (`detectaDelimitadorCSV`); falls back to the most consistent candidate, then comma.
-- `--input-decimal auto` selects comma only when numeric columns hold values like `1250,50` or `1.250,50` and none like `1250.50`; never with a comma delimiter (`detectaDecimalEntrada`).
-- `--input-decimal ','` converts `1.250,50` to `1250.50` in numeric columns (`ajustaDecimalEntrada`); the language itself reads only a decimal point.
-- CSV output (`cmd/rptgo/csv.go`, `csvOpcoes`): default comma, minimal quoting, point decimal, header row, ISO dates.
 - Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
 
 - Follow the workflows in `.claude/rules/bc-harness.md`.
-- Write docs and specs in English; keep pt-BR only for identifiers, flag values, quoted messages.
-- Ground claims in repo files; run `go test ./...` after code changes.
+- Write docs and specs in English.
+- Run `go test ./...` after code changes.
 
 ### Never in this repository
 
 - Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); `.claude/rules/bc-harness.md` forbids it.
-- Never add external dependencies; module has none.
-- Never leave README blocks out of sync with scripts or output; `cmd/rptgo/readme_test.go` fails.
+- Never add external dependencies; `go.mod` has none.
+- Never leave marked doc blocks out of sync with scripts or output; `cmd/rptgo/readme_test.go` fails.
 
 ## 4. Setup, Troubleshooting and Tips
 
-- Prereq: Go 1.25. Image regeneration also needs a headless browser and `pdftoppm`.
+- Prereq: Go 1.25. Image regeneration also needs Chrome and `pdftoppm`.
 
 ```sh
 go build -o rptgo ./cmd/rptgo
 ./rptgo --help
-./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
+./rptgo [options] script.rp [data.txt | -]
 ```
 
-- CLI options: `-h/--help`, `-o/--output`, `--encoding utf-8|latin-1|cp850`, `--header`, `--form-feed`, `--newline`, `--format text|html|csv|json`, `--box`, `--input delimited|csv|json`, `--input-delimiter`, `--input-decimal`, `--csv-delimiter`, `--csv-quote minimal|strings|all`, `--csv-decimal`, `--csv-no-header`, `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines`, `--strict`, `--check/-r`.
+- CLI flags: `--format text|csv|json|html`, `--box`, `--input delimited|csv|json`, `--input-delimiter`, `--input-decimal`, `--template`, `--var`, `--logo`, `--title`, `--encoding`, `--form-feed`, `--strict`.
+- `examples/feriados-brasil/run.sh` pipes JSON from `curl` into `rptgo`.
 
 | Symptom | Check |
 |---|---|
-| Exit code 2 | Invalid usage or option values; see rules below |
-| Exit code 1 | Script, data, I/O or template error; read source-line context in message |
-| Option combination rejected | `--input-decimal ','` invalid with `--input json` or a comma input delimiter; `--input-delimiter` only with `--input csv`; `--csv-*` only with `--format csv`; `--template/--var/--logo/--title/--lines` only with html; `--box` only with text or html and an encoding with box characters |
 | Non-deterministic dates in output | Set `RPT_NOW` |
 | Golden test fails after intended change | Run golden update command from section 1 |
-| README test fails | Re-sync block with file or command output |
+| Doc block test fails | Re-sync block with file or command output |
+| Rejected option combination | Read the error; run `./rptgo --help` |
 
 ## 5. References
 
 | Doc | Purpose |
 |---|---|
-| [README.md](README.md) | User docs (pt-BR): showcase, usage, language, examples |
+| [README.md](README.md) | User docs (pt-BR): usage, examples |
+| [REFERENCIA.md](REFERENCIA.md) | Language reference (pt-BR), verified by tests |
+| [SAIDA-HTML.md](SAIDA-HTML.md) | HTML output page, verified by tests |
 | [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
-| [examples/](examples) | 7 examples, each with `.rp` script and data files (`relatorio-vendas-regiao` also has CSV and JSON) |
-| [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README preview image generator |
+| [examples/](examples) | 9 example dirs, each with script, data and README.md or run.sh |
+| [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README image generator |
 
 ## 6. Agent Documentation
 

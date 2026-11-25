@@ -75,7 +75,7 @@
 1. Sort stable by keys; nil sorts first; `desc` reverses.
 2. Footer height measured by a dry run.
 3. No records = error `não há registros de entrada`.
-4. `header` runs first unless a `before report` section exists.
+4. `header` runs on every page, page 1 included. Without `before report`, it runs first, before the first row. With `before report`, it runs right after `before report` on the first row. With `Interp.Strict` (`--strict`) and a `before report` section, page 1 has no header; later pages still run it (`novaPagina`, `Interp.executa`).
 5. Per row: compare keys to the previous row; on change at level `j`, run `after` for levels `n-1` down to `j`, then `before` for `j` up to `n-1`, then `detail`.
 6. End: `after` of each level, `after report`, flush, close page.
 

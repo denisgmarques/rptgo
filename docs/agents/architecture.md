@@ -28,7 +28,7 @@ internal/report/           interpreter library
   value.go format.go dates.go   values, `using` masks, date parse/format
   config.go errors.go      env config + RPT_NOW clock, errors with source line
   testdata/golden/         .rp/.dat inputs and .txt baselines
-examples/                  7 runnable examples (+ csv/json variants of relatorio-vendas-regiao)
+examples/                  9 example dirs (script, data, README; some with run.sh/template); relatorio-vendas-regiao has csv/json variants
 docs/images/               README images (scripts/render-readme-images.sh)
 ```
 

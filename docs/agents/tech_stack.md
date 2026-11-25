@@ -26,7 +26,7 @@
 | Coverage tool | None configured |
 | Golden files | `internal/report/testdata/golden/` (`go test ./internal/report -run Golden -update`) |
 | Benchmark | `BenchmarkConverte200k` (`internal/report/bench_test.go`) |
-| Doc tests | `cmd/rptgo/readme_test.go`: `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` blocks and README images |
+| Doc tests | `cmd/rptgo/readme_test.go`: `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` blocks and README images; the same runner covers `README.md`, `SAIDA-HTML.md`, `examples/*/README.md` and the `REFERENCIA.md` examples |
 | Example tests | `cmd/rptgo/examples_test.go` |
 | Lint / CI / Makefile | None |
 
