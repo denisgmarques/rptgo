@@ -132,3 +132,24 @@ func TestExemplosDeNegocio(t *testing.T) {
 		})
 	}
 }
+
+func TestExemploInvoiceHTML(t *testing.T) {
+	dir := dirExemplos + "invoice-html/"
+	code, out, errb := executa(t, "", "--format", "html", "--box", "--template", dir+"template.html", "--logo", dir+"logo.svg",
+		"--var", "Company=Northwind Ltd", "--var", "Invoice=2026-0142", "--var", "BillTo=Acme Corp", "--var", "Footer=due in 30 days",
+		dir+"report.rp", dir+"data.txt")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb)
+	}
+	for _, want := range []string{"No. 2026-0142", "Acme Corp", "Northwind Ltd &middot; due in 30 days", "data:image/svg+xml;base64,",
+		"┌────────────────────────────┬───────┬────────────┬────────────┐", "1,885.88", "Page 1 of 1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML sem %q", want)
+		}
+	}
+	// faltando uma variável do modelo, o erro diz qual e em que linha
+	code, _, errb = executa(t, "", "--format", "html", "--template", dir+"template.html", "--logo", dir+"logo.svg", dir+"report.rp", dir+"data.txt")
+	if code != 1 || !strings.Contains(errb, "variável desconhecida {{Invoice}}") && !strings.Contains(errb, "variável desconhecida {{Company}}") {
+		t.Errorf("esperava erro de variável desconhecida: code=%d %q", code, errb)
+	}
+}

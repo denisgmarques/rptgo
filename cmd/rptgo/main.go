@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"rptgo/internal/report"
@@ -32,6 +33,11 @@ type opcoes struct {
 	check    bool
 	formato  string // text | csv | json
 	box      bool
+	template string   // --template (html)
+	vars     []string // --var NOME=VALOR (html)
+	logo     string   // --logo (html)
+	titulo   string   // --title (html)
+	linhas   int      // --lines (html)
 }
 
 func main() {
@@ -125,6 +131,22 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 			return 1
 		}
 		texto = buf.String()
+	case "html":
+		paginas, err := it.Paginas(op.linhas)
+		if err != nil {
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
+			return 1
+		}
+		if op.box {
+			for i := range paginas {
+				paginas[i] = converteCaixasLinhas(paginas[i])
+			}
+		}
+		texto, err = montaHTML(op, paginas)
+		if err != nil {
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
+			return 1
+		}
 	default:
 		texto, err = it.Run()
 		if err != nil {
@@ -133,7 +155,7 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		}
 	}
 
-	if op.box {
+	if op.box && op.formato == "text" {
 		texto = converteCaixas(texto)
 	}
 	crlf := op.newline == "crlf" || (op.newline == "auto" && runtime.GOOS == "windows")
@@ -142,6 +164,9 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	}
 
 	saidaBytes := codificar(texto, op.encoding)
+	if op.formato == "html" {
+		saidaBytes = []byte(texto) // o HTML é sempre UTF-8 (declarado no <meta charset>)
+	}
 	if op.saida != "" {
 		return escreveArquivo(op.saida, saidaBytes, erroPadrao)
 	}
@@ -272,11 +297,48 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 				return op, nil, err
 			}
 			if !contem(valoresFormato, v) {
-				return op, nil, fmt.Errorf("valor inválido para --format: %s (use text, csv ou json)", v)
+				return op, nil, fmt.Errorf("valor inválido para --format: %s (use text, csv, json ou html)", v)
 			}
 			op.formato = v
 		case "--box":
 			op.box = true
+		case "--template":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			op.template = v
+		case "--var":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if k, _, ok := strings.Cut(v, "="); !ok || !reNomeVar.MatchString(k) {
+				return op, nil, fmt.Errorf("valor inválido para --var: %s (use NOME=VALOR, com NOME só de letras, números e _)", v)
+			}
+			op.vars = append(op.vars, v)
+		case "--logo":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			op.logo = v
+		case "--title":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			op.titulo = v
+		case "--lines":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			n, convErr := strconv.Atoi(v)
+			if convErr != nil || n < 1 {
+				return op, nil, fmt.Errorf("valor inválido para --lines: %s (use um número inteiro maior que zero)", v)
+			}
+			op.linhas = n
 		case "--strict":
 			op.strict = true
 		case "--check", "-r":
@@ -288,10 +350,18 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			pos = append(pos, a)
 		}
 	}
-	if op.box && op.formato != "text" {
-		return op, nil, fmt.Errorf("--box só vale com --format text")
+	if op.box && op.formato != "text" && op.formato != "html" {
+		return op, nil, fmt.Errorf("--box só vale com --format text ou html")
 	}
-	if op.box && contem([]string{"latin-1", "latin1", "iso-8859-1", "iso8859-1"}, strings.ToLower(op.encoding)) {
+	if op.formato != "html" {
+		for opt, usada := range map[string]bool{"--template": op.template != "", "--var": len(op.vars) > 0,
+			"--logo": op.logo != "", "--title": op.titulo != "", "--lines": op.linhas > 0} {
+			if usada {
+				return op, nil, fmt.Errorf("%s só vale com --format html", opt)
+			}
+		}
+	}
+	if op.box && op.formato == "text" && contem([]string{"latin-1", "latin1", "iso-8859-1", "iso8859-1"}, strings.ToLower(op.encoding)) {
 		return op, nil, fmt.Errorf("--box não funciona com --encoding %s (sem caracteres de desenho de caixa); use utf-8 ou cp850", op.encoding)
 	}
 	if op.formato != "text" && op.formFeed {

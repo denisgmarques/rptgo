@@ -28,6 +28,9 @@ type Interp struct {
 	FormFeed bool
 	preenche bool
 
+	semMargens   bool // sem margem superior/esquerda (usado por Paginas)
+	linhasPagina int  // linhas de texto por página; 0 = length - margens do script
+
 	vars    map[string]Value
 	colIdx  map[string]int
 	row     Row
@@ -413,6 +416,9 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 // ---------------------------------------------------------------- saída / páginas
 
 func (it *Interp) cap() int {
+	if it.linhasPagina > 0 {
+		return it.linhasPagina - it.altRodape
+	}
 	return it.S.Length - it.S.Top - it.S.Bottom - it.altRodape
 }
 
@@ -434,6 +440,9 @@ func (it *Interp) flush() {
 	buf, extras := it.buf, it.extras
 	it.buf, it.extras, it.fimCol = nil, nil, 1
 	esq := strings.Repeat(" ", it.S.Left)
+	if it.semMargens {
+		esq = ""
+	}
 	limite := it.S.Width - it.S.Left
 	if len(buf) > 0 {
 		txt := strings.TrimRight(string(buf), " ")
@@ -470,7 +479,10 @@ func (it *Interp) fechaPagina(semRodape bool) {
 		}
 		it.corpo = append(it.corpo, cap...)
 	}
-	pag := make([]string, it.S.Top)
+	var pag []string
+	if !it.semMargens {
+		pag = make([]string, it.S.Top)
+	}
 	pag = append(pag, it.corpo...)
 	if it.preenche {
 		for len(pag) < it.S.Length {
@@ -770,7 +782,7 @@ func (it *Interp) ordena() {
 }
 
 // Run executa o relatório completo e devolve o texto final, já paginado.
-func (it *Interp) Run() (string, error) {
+func (it *Interp) executa() error {
 	it.ordena()
 
 	// altura do rodapé: medida com uma execução "seca" antes de começar de verdade
@@ -783,7 +795,7 @@ func (it *Interp) Run() (string, error) {
 		var cap []string
 		it.captura = &cap
 		if err := it.exec(corpo); err != nil {
-			return "", err
+			return err
 		}
 		it.flush()
 		it.altRodape = len(cap)
@@ -791,7 +803,7 @@ func (it *Interp) Run() (string, error) {
 	}
 	it.pageno = 1
 	if len(it.rows) == 0 {
-		return "", Erro("não há registros de entrada")
+		return Erro("não há registros de entrada")
 	}
 
 	niveis := make([]string, len(it.S.Sort))
@@ -819,7 +831,7 @@ func (it *Interp) Run() (string, error) {
 		if corpo, ok := sec("header", ""); ok {
 			it.row = it.rows[0]
 			if err := it.exec(corpo); err != nil {
-				return "", err
+				return err
 			}
 			it.flush()
 		}
@@ -837,7 +849,7 @@ func (it *Interp) Run() (string, error) {
 		if prev == nil {
 			if corpo, ok := sec("before", "report"); ok {
 				if err := roda(corpo, ok, r, nil); err != nil {
-					return "", err
+					return err
 				}
 			}
 		} else {
@@ -854,7 +866,7 @@ func (it *Interp) Run() (string, error) {
 				}
 				corpo, ok := sec("after", niveis[j])
 				if err := roda(corpo, ok, prev, it.rows[ini[j]:i]); err != nil {
-					return "", err
+					return err
 				}
 			}
 		}
@@ -863,13 +875,13 @@ func (it *Interp) Run() (string, error) {
 			if niveis[j] != "" {
 				corpo, ok := sec("before", niveis[j])
 				if err := roda(corpo, ok, r, nil); err != nil {
-					return "", err
+					return err
 				}
 			}
 		}
 		if corpo, ok := sec("detail", ""); ok {
 			if err := roda(corpo, ok, r, nil); err != nil {
-				return "", err
+				return err
 			}
 		}
 		prev, prevK = r, k
@@ -880,17 +892,25 @@ func (it *Interp) Run() (string, error) {
 		}
 		corpo, ok := sec("after", niveis[j])
 		if err := roda(corpo, ok, prev, it.rows[ini[j]:]); err != nil {
-			return "", err
+			return err
 		}
 	}
 	if corpo, ok := sec("after", "report"); ok {
 		if err := roda(corpo, ok, prev, it.rows); err != nil {
-			return "", err
+			return err
 		}
 	}
 	it.flush()
 	it.fechaPagina(false)
 
+	return nil
+}
+
+// Run executa o relatório e devolve o texto final, paginado.
+func (it *Interp) Run() (string, error) {
+	if err := it.executa(); err != nil {
+		return "", err
+	}
 	sep := ""
 	if it.FormFeed {
 		sep = "\f"
@@ -904,4 +924,19 @@ func (it *Interp) Run() (string, error) {
 		sb.WriteString("\n")
 	}
 	return sb.String(), nil
+}
+
+// Paginas executa o relatório e devolve cada página como lista de linhas, sem completar com
+// linhas em branco, sem as linhas da margem superior e sem a margem esquerda (quem apresenta
+// as páginas, como um modelo HTML, cuida das margens). linhasPorPagina é o número de linhas de
+// texto por página, incluindo cabeçalho e rodapé; 0 usa length - top margin - bottom margin
+// do script.
+func (it *Interp) Paginas(linhasPorPagina int) ([][]string, error) {
+	it.preenche = false
+	it.semMargens = true
+	it.linhasPagina = linhasPorPagina
+	if err := it.executa(); err != nil {
+		return nil, err
+	}
+	return it.paginas, nil
 }

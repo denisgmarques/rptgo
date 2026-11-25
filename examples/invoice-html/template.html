@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice {{Invoice}} - {{Company}}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  body { margin: 0; background: #e6e9ee; font-family: Helvetica, Arial, sans-serif; color: #222; }
+  .sheet { width: 210mm; height: 297mm; margin: 8mm auto; padding: 18mm 18mm 14mm; background: #fff;
+           box-shadow: 0 1px 8px rgba(0,0,0,.25); display: flex; flex-direction: column;
+           page-break-after: always; box-sizing: border-box; overflow: hidden; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10mm; }
+  header img { height: 16mm; }
+  .meta { text-align: right; font-size: 10pt; line-height: 1.5; }
+  .meta strong { font-size: 16pt; color: #1f4e79; letter-spacing: .05em; }
+  .bill { margin-bottom: 8mm; font-size: 10pt; }
+  .bill b { display: block; color: #555; font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; }
+  pre { flex: 1; margin: 0; font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+        font-size: min(10pt, calc(174mm / ({{Columns}} * 0.6))); line-height: 1.1; color: #1f4e79; }
+  footer { border-top: .3mm solid #1f4e79; padding-top: 3mm; font-size: 8pt; color: #555; display: flex; justify-content: space-between; }
+  @media print { body { background: none; } .sheet { margin: 0; box-shadow: none; } }
+</style>
+</head>
+<body>
+{{#Pages}}
+<section class="sheet">
+  <header>
+    <img src="{{Logo}}" alt="{{Company}}">
+    <div class="meta"><strong>INVOICE</strong><br>No. {{Invoice}}<br>{{Date}}</div>
+  </header>
+  <div class="bill"><b>Bill to</b>{{BillTo}}</div>
+  <pre>{{Text}}</pre>
+  <footer><span>{{Company}} &middot; {{Footer}}</span><span>Page {{PageNumber}} of {{PageCount}}</span></footer>
+</section>
+{{/Pages}}
+</body>
+</html>

@@ -33,23 +33,30 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 - `--encoding utf-8|latin-1|cp850` — codificação de leitura/escrita. O `cp850` (página de
   código DOS, comum em impressoras matriciais) vale para o script, para os dados e para a
   saída.
-- `--format text|csv|json` — formato da saída (padrão: `text`, o relatório paginado de
+- `--format text|csv|json|html` — formato da saída (padrão: `text`, o relatório paginado de
   colunas fixas). `csv` e `json` geram um registro por linha de entrada, na ordem do `sort`,
   com as colunas do `input`; as seções `before`/`after`/`header`/`footer`/`detail` não são
   executadas e `width`/`length`/margens são ignorados. Datas (`date` e `ldate`) saem como
-  `AAAA-MM-DD`, nulos como vazio (CSV) ou `null` (JSON), e `bool` como `true`/`false`.
-  `--format csv|json` não pode ser combinado com `--form-feed` (erro, código de saída 2).
+  `AAAA-MM-DD`, nulos como vazio (CSV) ou `null` (JSON), e `bool` como `true`/`false`. O
+  `html` junta as páginas do relatório a um modelo HTML (veja "Saída HTML e caixas").
+- `--box` — troca caixas ASCII (`+---+` e `|`) por caracteres de desenho de linha (`┌─┬┐│├┼┤└┴┘`).
+  Vale com `--format text` (`--encoding utf-8` ou `cp850`, que usa os bytes de caixa do DOS) e
+  com `html`; não vale com `latin-1`, `csv` nem `json`.
+- `--template`, `--var NOME=VALOR`, `--logo`, `--title`, `--lines` — opções do `--format html`.
+  `--format csv|json|html` não pode ser combinado com `--form-feed` (erro, código de saída 2).
   Valores inválidos em `--format`, `--header`, `--newline` e `--encoding` também dão erro
   com código 2.
 
 ## Primeiros passos
 
-Seis exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
+Sete exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
 total e contagem por grupo), `relatorio-estoque-categoria/` (duas quebras em cascata, com
 `count`, `total` e `avg`), `cadastro-clientes/` (datas, `bool` e valores nulos) e três
 exemplos de negócio em inglês: `payroll-by-department/` (folha por departamento, `if` com
 `bool` e `where` nos agregados), `invoice-aging/` (contas a receber com prazos e faixas de
-atraso) e `purchase-orders/` (cliente > pedido > itens, com totais e frete). Todos usam
+atraso) e `purchase-orders/` (cliente > pedido > itens, com totais e frete). O sétimo,
+`invoice-html/`, mostra caixas ASCII, `--box` e um modelo HTML com logo (veja "Saída HTML e
+caixas"). Todos usam
 dados fictícios e não chamam `today`/`hour`, então a saída é sempre a mesma. A partir da raiz
 do repositório:
 
@@ -155,6 +162,68 @@ id,nome,nascimento,cadastro,ativo,limite
 5,"Elisa, Prado",2001-09-09,2022-05-05,false,800.25
 ```
 
+Relatórios com caixas desenhadas em ASCII (`+---+` e `|`) podem sair com caracteres de linha
+usando `--box`:
+
+```
+./rptgo --box examples/invoice-html/report.rp examples/invoice-html/data.txt
+```
+
+```
+
+
+  ┌────────────────────────────┬───────┬────────────┬────────────┐
+  │ Item                       │   Qty │      Price │      Total │
+  ├────────────────────────────┼───────┼────────────┼────────────┤
+  │ Cloud hosting (monthly)    │     1 │     349.90 │     349.90 │
+  │ Consulting - design review │     8 │     120.00 │     960.00 │
+  │ Domain registration        │     2 │      14.99 │      29.98 │
+  │ Support plan - premium     │    12 │      45.50 │     546.00 │
+  ├────────────────────────────┼───────┼────────────┼────────────┤
+  │ Items                      │    23 │            │   1,885.88 │
+  └────────────────────────────┴───────┴────────────┴────────────┘
+```
+
+## Saída HTML e caixas
+
+`--format html` junta as páginas do relatório a um modelo HTML, para imprimir numa jato de tinta
+ou salvar em PDF pelo navegador, sem mudar o script `.rp`. O RPT continua cuidando da
+ordenação, das quebras, dos totais e do alinhamento; o modelo só cuida da moldura (logo,
+cabeçalho, rodapé, cores).
+
+```
+rptgo --format html --box --template examples/invoice-html/template.html \
+      --logo examples/invoice-html/logo.svg \
+      --var Company="Northwind Ltd" --var Invoice=2026-0142 \
+      --var BillTo="Acme Corp, 100 Main St, Springfield" --var Footer="payment due in 30 days" \
+      examples/invoice-html/report.rp examples/invoice-html/data.txt > invoice.html
+```
+
+- **Páginas sem preenchimento:** diferente do `text` (que completa cada página com linhas em
+  branco até o `length`, como numa impressora matricial), o HTML traz só as linhas de cada
+  página, sem a margem superior nem a esquerda do script. Quem quebra a página fisicamente é
+  o CSS (`@page`, `break-after`). O número de linhas por página vem de `length` menos
+  `top margin` e `bottom margin`, ou de `--lines N`. A saída é sempre UTF-8.
+- **Modelo:** texto HTML com marcadores `{{Nome}}`. `{{#Pages}}...{{/Pages}}` repete o bloco
+  uma vez por página. Todo valor é escapado para HTML. Variável desconhecida é erro, com a
+  linha do modelo. Sem `--template`, um modelo embutido (folhas A4) é usado.
+
+  | Marcador | Valor |
+  |---|---|
+  | `{{Title}}` | `--title` (padrão: nome do script, sem extensão) |
+  | `{{Script}}` | nome do arquivo do script |
+  | `{{Date}}`, `{{Time}}` | data (`AAAA-MM-DD`) e hora (`HH:MM`); `RPT_NOW` fixa o relógio |
+  | `{{Columns}}` | largura do texto em caracteres (para calcular o tamanho da fonte) |
+  | `{{PageCount}}` | número de páginas |
+  | `{{Logo}}` | `--logo` como imagem embutida (data URI: png, jpg, gif, svg ou webp) |
+  | `{{NOME}}` | cada `--var NOME=VALOR` (os nomes acima são reservados) |
+  | `{{PageNumber}}`, `{{Text}}` | só dentro do bloco: número e texto da página |
+
+- **Caixas:** com `--box`, as caixas ASCII viram `┌─┬┐│├┼┤└┴┘`. Cada `+` vira canto ou
+  junção conforme os vizinhos; `-` e `|` só mudam quando fazem parte de uma linha, então
+  `2026-06` ou um `|` solto no texto ficam como estão. Com `--format text --encoding cp850` os
+  caracteres saem como os bytes de caixa do DOS.
+
 ## A linguagem do script (`.rp`)
 
 ```
@@ -214,9 +283,12 @@ reprodutíveis.
 ```
 cmd/rptgo/          interface de linha de comando
   cp850.go          tabela da página de código CP850 (--encoding cp850)
+  box.go            --box: caixas ASCII -> caracteres de desenho de linha
   csv.go            saída --format csv
   json.go           saída --format json
-examples/           relatórios de exemplo (vendas, estoque, cadastro, folha, contas a receber, pedidos)
+  html.go           saída --format html: modelo com {{marcadores}}, logo embutido
+  ajuda.go          --help e valores aceitos pelas opções
+examples/           relatórios de exemplo (vendas, estoque, cadastro, folha, contas a receber, pedidos, fatura HTML)
 internal/report/
   lexer.go          análise léxica (tokens, comentários, literais de data/repetição)
   parser.go         análise sintática recursiva descendente -> AST

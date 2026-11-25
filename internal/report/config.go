@@ -26,3 +26,7 @@ func agora() time.Time {
 	}
 	return time.Now()
 }
+
+// Agora devolve o relógio do relatório (RPT_NOW quando definido), para uso por quem apresenta
+// o relatório, como os modelos HTML do cmd/rptgo.
+func Agora() time.Time { return agora() }

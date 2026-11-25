@@ -1,0 +1,24 @@
+/* Invoice lines drawn with ASCII boxes (+---+ and |). Run with --box to get line-drawing
+   characters, and with --format html --template template.html for the printable page. */
+input
+   item   [string 26],
+   qty    [numeric 6],
+   price  [amount 10]
+
+width 70
+length 40
+sort item
+
+before report
+   print '+----------------------------+-------+------------+------------+'
+   print '| Item                       |   Qty |      Price |      Total |'
+   print '+----------------------------+-------+------------+------------+'
+
+detail
+   print '|' in col 1, item in col 3, '|' in col 30, qty in col 32 using '####&', '|' in col 38, price in col 40 using '###,##&.&&', '|' in col 51, qty * price in col 53 using '###,##&.&&', '|' in col 64
+
+after report
+   print '+----------------------------+-------+------------+------------+'
+   print '|' in col 1, 'Items' in col 3, '|' in col 30, total(qty) in col 32 using '####&', '|' in col 38, '|' in col 51, total(qty * price) in col 53 using '###,##&.&&', '|' in col 64
+   print '+----------------------------+-------+------------+------------+'
+end
