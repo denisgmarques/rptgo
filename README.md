@@ -85,7 +85,8 @@ Fonte dos dados (padrão: texto com campos separados por '|', ou pelo 'separator
       --input-delimiter CARACTERE  delimitador do CSV de entrada: ; , | tab ou auto (padrão: detecta
                                  pelo número de colunas do input; aspas são sempre aceitas)
       --input-decimal CARACTERE  separador decimal dos números na entrada: . (padrão), , ou auto
-                                 (com , lê 1.250,50 como 1250.50; auto escolhe pelos valores);
+                                 (com , lê 1.250,50 e R$ 1.250,50 como 1250.50; auto escolhe pelos
+                                 valores; em JSON vale só para valores entre aspas);
                                  CSV do Excel brasileiro: --input csv --input-decimal auto
                                  --encoding latin-1
 
@@ -750,6 +751,158 @@ psql -At -F'|' -c "select regiao, vendedor, valor from vendas" | ./rptgo relator
 sqlite3 -separator '|' vendas.db "select regiao, vendedor, valor from vendas" | ./rptgo relatorio.rp -
 mysql -B -e "select regiao, vendedor, valor from vendas" | ./rptgo --input csv --input-delimiter tab relatorio.rp -
 ```
+
+**Direto de uma API, sem conversão:** o JSON que o `curl` traz entra como está, sem `jq`. O exemplo
+[`examples/fipe-veiculos/`](examples/fipe-veiculos/) lista a tabela FIPE por marca, depois modelo, com as versões (ano e combustível)
+e o preço. A API entrega um objeto por veículo e ano, e o `input` do script só escolhe as chaves
+de que precisa (`brand`, `model`, `modelYear`, `fuel`, `codeFipe`, `price`; maiúsculas e
+minúsculas não importam). O preço chega como texto (`R$ 54.390,00`) e é só listado, então
+a coluna é `string` e não precisa virar número.
+
+<!-- file: examples/fipe-veiculos/relatorio.rp -->
+```text
+/* Tabela FIPE por marca, modelo e versao (ano/combustivel), com o preco medio. A entrada e o
+   JSON que a API devolve, sem conversao: um objeto por veiculo/ano. O preco e listado como
+   texto ("R$ 54.390,00"), entao nao precisa virar numero: nada aqui e somado. */
+input
+   brand           [string 20],
+   model           [string 50],
+   modelyear       [numeric 4],
+   fuel            [string 12],
+   codefipe        [string 10],
+   price           [string 14],
+   referencemonth  [string 20]
+
+width 78
+length 60
+sort brand, model, modelyear
+
+before report
+   print 'TABELA FIPE - PRECO MEDIO DE VEICULOS' centered
+   print 'Referencia: ' + referencemonth centered
+   skip
+
+before brand
+   need 8
+   print 'MARCA ' + brand in col 1
+   print 74[-] in col 1
+   print 'Ano' in col 7, 'Combustivel' in col 14, 'Cod. FIPE' in col 30, 'Preco' in col 48
+
+before model
+   print model in col 3
+
+detail
+   print modelyear in col 7 using '&&&&', fuel in col 14, codefipe in col 30, price in col 48
+
+after model
+   print 'Versoes listadas:' in col 7, count(*) in col 48 using '#&'
+   skip
+
+after brand
+   print 'Total de versoes de ' + brand in col 1, count(*) in col 48 using '#&'
+   print 74[-] in col 1
+   skip
+end
+```
+
+Uma amostra fictícia no mesmo formato da resposta da API, [`dados-exemplo.json`](examples/fipe-veiculos/dados-exemplo.json):
+
+<!-- file: examples/fipe-veiculos/dados-exemplo.json -->
+```text
+{"vehicleType":1,"price":"R$ 60.335,00","brand":"Brisa","model":"Onda 1.0 Flex 8V 4p","modelYear":2024,"fuel":"Flex","codeFipe":"990101-8","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 92.480,00","brand":"Aurora","model":"Cometa 1.6 Flex 16V 4p Aut.","modelYear":2024,"fuel":"Flex","codeFipe":"990002-9","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 61.870,00","brand":"Aurora","model":"Cometa 1.0 Flex 12V 4p Mec.","modelYear":2022,"fuel":"Flex","codeFipe":"990001-1","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 67.240,00","brand":"Aurora","model":"Cometa 1.0 Flex 12V 4p Mec.","modelYear":2023,"fuel":"Flex","codeFipe":"990001-1","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 56.980,00","brand":"Brisa","model":"Onda 1.0 Flex 8V 4p","modelYear":2023,"fuel":"Flex","codeFipe":"990101-8","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 85.690,00","brand":"Aurora","model":"Cometa 1.6 Flex 16V 4p Aut.","modelYear":2023,"fuel":"Flex","codeFipe":"990002-9","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 138.750,00","brand":"Aurora","model":"Duna 2.0 Turbo 16V 5p Aut.","modelYear":2023,"fuel":"Gasolina","codeFipe":"990003-7","referenceMonth":"novembro de 2026","fuelAcronym":"G"}
+{"vehicleType":1,"price":"R$ 72.915,00","brand":"Aurora","model":"Cometa 1.0 Flex 12V 4p Mec.","modelYear":2024,"fuel":"Flex","codeFipe":"990001-1","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 79.300,00","brand":"Aurora","model":"Cometa 1.6 Flex 16V 4p Aut.","modelYear":2022,"fuel":"Flex","codeFipe":"990002-9","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 219.870,00","brand":"Cedro","model":"Pampa 2.8 Diesel 4x4 CD Mec.","modelYear":2024,"fuel":"Diesel","codeFipe":"990201-4","referenceMonth":"novembro de 2026","fuelAcronym":"D"}
+{"vehicleType":1,"price":"R$ 71.560,00","brand":"Brisa","model":"Onda 1.4 Flex 16V 4p Aut.","modelYear":2023,"fuel":"Flex","codeFipe":"990102-6","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 149.020,00","brand":"Aurora","model":"Duna 2.0 Turbo 16V 5p Aut.","modelYear":2024,"fuel":"Gasolina","codeFipe":"990003-7","referenceMonth":"novembro de 2026","fuelAcronym":"G"}
+{"vehicleType":1,"price":"R$ 77.190,00","brand":"Brisa","model":"Onda 1.4 Flex 16V 4p Aut.","modelYear":2024,"fuel":"Flex","codeFipe":"990102-6","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 52.410,00","brand":"Brisa","model":"Onda 1.0 Flex 8V 4p","modelYear":2022,"fuel":"Flex","codeFipe":"990101-8","referenceMonth":"novembro de 2026","fuelAcronym":"F"}
+{"vehicleType":1,"price":"R$ 189.900,00","brand":"Cedro","model":"Pampa 2.8 Diesel 4x4 CD Mec.","modelYear":2022,"fuel":"Diesel","codeFipe":"990201-4","referenceMonth":"novembro de 2026","fuelAcronym":"D"}
+{"vehicleType":1,"price":"R$ 203.450,00","brand":"Cedro","model":"Pampa 2.8 Diesel 4x4 CD Mec.","modelYear":2023,"fuel":"Diesel","codeFipe":"990201-4","referenceMonth":"novembro de 2026","fuelAcronym":"D"}
+```
+
+<!-- run -->
+```sh
+./rptgo --input json examples/fipe-veiculos/relatorio.rp examples/fipe-veiculos/dados-exemplo.json
+```
+<!-- expect -->
+```text
+
+
+                      TABELA FIPE - PRECO MEDIO DE VEICULOS
+                          Referencia: novembro de 2026
+
+  MARCA Aurora
+  --------------------------------------------------------------------------
+        Ano    Combustivel     Cod. FIPE         Preco
+    Cometa 1.0 Flex 12V 4p Mec.
+        2022   Flex            990001-1          R$ 61.870,00
+        2023   Flex            990001-1          R$ 67.240,00
+        2024   Flex            990001-1          R$ 72.915,00
+        Versoes listadas:                         3
+
+    Cometa 1.6 Flex 16V 4p Aut.
+        2022   Flex            990002-9          R$ 79.300,00
+        2023   Flex            990002-9          R$ 85.690,00
+        2024   Flex            990002-9          R$ 92.480,00
+        Versoes listadas:                         3
+
+    Duna 2.0 Turbo 16V 5p Aut.
+        2023   Gasolina        990003-7          R$ 138.750,00
+        2024   Gasolina        990003-7          R$ 149.020,00
+        Versoes listadas:                         2
+
+  Total de versoes de Aurora                      8
+  --------------------------------------------------------------------------
+
+  MARCA Brisa
+  --------------------------------------------------------------------------
+        Ano    Combustivel     Cod. FIPE         Preco
+    Onda 1.0 Flex 8V 4p
+        2022   Flex            990101-8          R$ 52.410,00
+        2023   Flex            990101-8          R$ 56.980,00
+        2024   Flex            990101-8          R$ 60.335,00
+        Versoes listadas:                         3
+
+    Onda 1.4 Flex 16V 4p Aut.
+        2023   Flex            990102-6          R$ 71.560,00
+        2024   Flex            990102-6          R$ 77.190,00
+        Versoes listadas:                         2
+
+  Total de versoes de Brisa                       5
+  --------------------------------------------------------------------------
+
+  MARCA Cedro
+  --------------------------------------------------------------------------
+        Ano    Combustivel     Cod. FIPE         Preco
+    Pampa 2.8 Diesel 4x4 CD Mec.
+        2022   Diesel          990201-4          R$ 189.900,00
+        2023   Diesel          990201-4          R$ 203.450,00
+        2024   Diesel          990201-4          R$ 219.870,00
+        Versoes listadas:                         3
+
+  Total de versoes de Cedro                       3
+  --------------------------------------------------------------------------
+```
+
+Com a API de verdade basta um `curl` na entrada padrão (várias respostas em sequência são aceitas):
+
+```sh
+curl -s https://fipe.parallelum.com.br/api/v2/cars/brands/21/models/437/years/1985-1 | ./rptgo --input json examples/fipe-veiculos/relatorio.rp -
+```
+
+O [`run.sh`](examples/fipe-veiculos/run.sh) faz o percurso inteiro só com `curl` e o próprio `rptgo`: pega os anos de cada
+modelo (o `anos.rp` extrai os códigos do JSON), busca o preço de cada ano e gera o relatório. Use
+`./run.sh <marca> <modelo>...` com os códigos de `.../cars/brands` e de `.../cars/brands/<marca>/models`.
+A BrasilAPI também expõe os dados da FIPE (`/api/fipe/marcas`, `/veiculos` e `/preco`), mas o
+endpoint de preço dela exige o código FIPE, que a lista de veículos dela não traz; por isso o
+exemplo usa a API aberta, que devolve o código junto com o preço.
 
 Há mais exemplos em `examples/`: estoque por categoria (duas quebras com `count`/`total`/`avg`),
 cadastro de clientes (datas, `bool` e nulos), contas a receber (prazos e faixas de atraso) e

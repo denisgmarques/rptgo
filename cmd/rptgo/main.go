@@ -129,11 +129,10 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		delim := delimCSV
 		registros, err = leRegistrosCSV(dados, delim, strings.ToLower(script.Input[0].Name), op.header)
 	case entradaJSON:
-		nomes := make([]string, len(script.Input))
-		for i, c := range script.Input {
-			nomes[i] = c.Name
+		registros, err = leRegistrosJSONDec(dados, script.Input, op.inputDec == ",")
+		if err == nil && op.inputDec == "auto" && temDecimalVirgula(registros, script.Input) {
+			registros, err = leRegistrosJSONDec(dados, script.Input, true) // valores como "R$ 1.250,50"
 		}
-		registros, err = leRegistrosJSON(dados, nomes)
 		report.DefFonteDados(textoFonteJSON(dados))
 	default:
 		registros = leRegistros(dados, script.Separator, script.Input[0].Name, op.header, len(script.Input))
@@ -143,6 +142,9 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		return 1
 	}
 	decimal := op.inputDec
+	if op.input == entradaJSON {
+		decimal = "" // o JSON já foi convertido na leitura (só os valores entre aspas)
+	}
 	if decimal == "auto" {
 		decimal = string(detectaDecimalEntrada(registros, script.Input, delimCSV))
 	}
@@ -454,9 +456,6 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 	}
 	if op.box && op.formato != "text" && op.formato != "html" {
 		return op, nil, fmt.Errorf("--box só vale com --format text ou html")
-	}
-	if op.inputDec != "" && op.input == entradaJSON {
-		return op, nil, fmt.Errorf("--input-decimal não vale com --input json (os números do JSON já são números)")
 	}
 	if op.inputDec == "," && op.input == entradaCSV && (op.inputDelim == "," || op.inputDelim == "comma") {
 		return op, nil, fmt.Errorf("--input-decimal \",\" e o delimitador do CSV de entrada não podem ser a vírgula; use --input-delimiter ';'")

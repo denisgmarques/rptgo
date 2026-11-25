@@ -233,7 +233,6 @@ func TestInputDecimalValidacoes(t *testing.T) {
 	dat := filepath.Join(dirGolden, "vendas.dat")
 	for _, args := range [][]string{
 		{"--input-decimal", ";", rp, dat},
-		{"--input", "json", "--input-decimal", ",", rp, dat},
 		{"--input", "csv", "--input-delimiter", ",", "--input-decimal", ",", rp, dat}, // a vírgula não pode ser os dois
 	} {
 		code, out, errb := executa(t, "", args...)
@@ -338,5 +337,56 @@ func TestExecutarCSVComDeteccaoAutomatica(t *testing.T) {
 	writeFile(t, dat, "nome,obs,valor\nAna,ok,1\n")
 	if code, _, errb := executa(t, "", "--input", "csv", "--input-decimal", ",", rp, dat); code != 1 || !strings.Contains(errb, "delimitador vírgula") {
 		t.Errorf("decimal vírgula com delimitador vírgula: code=%d %q", code, errb)
+	}
+}
+
+func TestTiraMoedaELimpaNumeroBR(t *testing.T) {
+	casos := []struct{ in, want string }{
+		{"R$ 54.390,00", "54390.00"}, {"R$54.390,00", "54390.00"}, {" r$ 1,5 ", "1.5"}, {"US$ 1.000,10", "1000.10"},
+		{"$ 12,30", "12.30"}, {"€ 5,00", "5.00"}, {"1.250,50", "1250.50"}, {"980,5", "980.5"}, {"1250", "1250"},
+		{"-R$ 1,00", "-1.00"}, {"R$ -1,00", "-1.00"}, {"54.390,00 BRL", "54390.00"}, {"12 EUR", "12"},
+		// o que não é número fica como veio, para o erro de dado aparecer
+		{"12abc", "12abc"}, {"abc", "abc"}, {"R$ abc", "R$ abc"}, {"", ""}, {"R$", "R$"},
+	}
+	for _, c := range casos {
+		if got := limpaNumeroBR(c.in); got != c.want {
+			t.Errorf("limpaNumeroBR(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestJSONComValoresEmTextoEDecimalVirgula(t *testing.T) {
+	dir := t.TempDir()
+	rp := filepath.Join(dir, "s.rp")
+	writeFile(t, rp, "input\n  marca [string 12],\n  ano [numeric 4],\n  preco [amount 12]\nsort marca\ndetail\n  print marca in col 1, ano in col 16, preco in col 24 using '###,##&.&&'\nend\n")
+	dat := filepath.Join(dir, "d.json")
+	// um objeto por resposta, como as APIs entregam; o preço vem como texto com moeda
+	writeFile(t, dat, `{"marca":"Aurora","ano":2024,"preco":"R$ 54.390,00"}`+"\n"+`{"marca":"Brisa","ano":2023,"preco":"R$ 1.250,50"}`+"\n"+`{"marca":"Cometa","ano":2022,"preco":980.5}`+"\n")
+	for _, dec := range []string{",", "auto"} {
+		code, out, errb := executa(t, "", "--input", "json", "--input-decimal", dec, rp, dat)
+		if code != 0 {
+			t.Fatalf("--input-decimal %s: exit %d: %s", dec, code, errb)
+		}
+		// 980.5 é número JSON de verdade e não pode ser tratado como "9805"
+		for _, want := range []string{"54,390.00", "1,250.50", "980.50"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("--input-decimal %s: saída sem %q:\n%s", dec, want, out)
+			}
+		}
+	}
+	// sem a opção, o texto "R$ 54.390,00" não é número: erro de dados, não valor errado
+	if code, _, errb := executa(t, "", "--input", "json", rp, dat); code != 1 || !strings.Contains(errb, "valor inválido") {
+		t.Errorf("sem --input-decimal: code=%d %q", code, errb)
+	}
+	// lixo no meio do número continua sendo erro mesmo com a opção
+	writeFile(t, dat, `{"marca":"A","ano":2024,"preco":"12abc"}`)
+	if code, _, errb := executa(t, "", "--input", "json", "--input-decimal", ",", rp, dat); code != 1 || !strings.Contains(errb, "valor inválido") {
+		t.Errorf("12abc: code=%d %q", code, errb)
+	}
+	// no CSV a moeda também é aceita
+	writeFile(t, dat, "marca;ano;preco\nAurora;2024;R$ 54.390,00\n")
+	code, out, errb := executa(t, "", "--input", "csv", "--input-decimal", "auto", rp, dat)
+	if code != 0 || !strings.Contains(out, "54,390.00") {
+		t.Errorf("csv com moeda: code=%d %q %q", code, out, errb)
 	}
 }

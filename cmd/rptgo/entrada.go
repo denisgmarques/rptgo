@@ -52,6 +52,21 @@ func leRegistrosCSV(texto string, delim rune, primeiraColuna, cabecalho string) 
 // Uma coluna do input que não aparece em nenhum registro é erro, pois quase sempre é erro de
 // digitação no nome.
 func leRegistrosJSON(texto string, colunas []string) ([][]string, error) {
+	cols := make([]report.InputCol, len(colunas))
+	for i, n := range colunas {
+		cols[i] = report.InputCol{Name: n, Type: "string"}
+	}
+	return leRegistrosJSONDec(texto, cols, false)
+}
+
+// leRegistrosJSONDec é leRegistrosJSON com o tipo das colunas do input e, se decimalVirgula,
+// com os valores que vêm como texto JSON ("R$ 54.390,00", "1.250,50") em colunas numéricas
+// convertidos para o formato interno (54390.00). Números JSON de verdade nunca são alterados.
+func leRegistrosJSONDec(texto string, cols []report.InputCol, decimalVirgula bool) ([][]string, error) {
+	colunas := make([]string, len(cols))
+	for i, c := range cols {
+		colunas[i] = c.Name
+	}
 	dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(texto, "\xEF\xBB\xBF")))
 	dec.UseNumber()
 	var objs []map[string]any
@@ -99,6 +114,9 @@ func leRegistrosJSON(texto string, colunas []string) ([][]string, error) {
 			switch x := v.(type) {
 			case nil:
 			case string:
+				if decimalVirgula && tiposNumericos[cols[j].Type] {
+					x = limpaNumeroBR(x)
+				}
 				reg[j] = x
 			case json.Number:
 				reg[j] = x.String()
@@ -140,10 +158,37 @@ func ajustaDecimalEntrada(regs [][]string, cols []report.InputCol) {
 			if j >= len(cols) || !tiposNumericos[cols[j].Type] {
 				continue
 			}
-			f := strings.ReplaceAll(strings.TrimSpace(reg[j]), ".", "")
-			reg[j] = strings.Replace(f, ",", ".", 1)
+			reg[j] = limpaNumeroBR(reg[j])
 		}
 	}
+}
+
+var (
+	reMoedaIni  = regexp.MustCompile(`(?i)^\s*([+-]?)\s*(R\$|US\$|BRL|USD|EUR|[$€£¥])?\s*`)
+	reMoedaFim  = regexp.MustCompile(`(?i)\s*(BRL|USD|EUR|[$€£¥])?\s*$`)
+	reSoNumeros = regexp.MustCompile(`^[+-]?[0-9.,]+$`)
+)
+
+// tiraMoeda remove um símbolo de moeda no começo ou no fim ("R$ 54.390,00" vira "54.390,00").
+// Se o que sobra não for só um número, devolve o texto original, para o erro de valor inválido
+// continuar aparecendo em vez de ser escondido.
+func tiraMoeda(s string) string {
+	t := reMoedaFim.ReplaceAllString(reMoedaIni.ReplaceAllString(s, "$1"), "")
+	if !reSoNumeros.MatchString(t) {
+		return s
+	}
+	return t
+}
+
+// limpaNumeroBR converte um número com vírgula decimal, ponto de milhar e símbolo de moeda
+// opcional ("R$ 1.250,50") para o formato interno (1250.50).
+func limpaNumeroBR(s string) string {
+	t := tiraMoeda(s)
+	if t == s {
+		t = strings.TrimSpace(s)
+	}
+	t = strings.ReplaceAll(t, ".", "")
+	return strings.Replace(t, ",", ".", 1)
 }
 
 // detectaDelimitadorCSV escolhe o delimitador de um CSV olhando o começo do arquivo: para cada
@@ -199,6 +244,20 @@ var (
 	reMilhar     = regexp.MustCompile(`^-?\d{1,3}(\.\d{3})+$`)
 )
 
+// temDecimalVirgula diz se alguma coluna numérica tem um valor na forma 1250,50 / 1.250,50 (com
+// ou sem símbolo de moeda). No JSON isso só pode vir de um valor entre aspas, então basta um para
+// escolher a vírgula, mesmo que outros valores sejam números JSON de verdade.
+func temDecimalVirgula(regs [][]string, cols []report.InputCol) bool {
+	for _, reg := range regs {
+		for j, f := range reg {
+			if j < len(cols) && tiposNumericos[cols[j].Type] && reDecVirgula.MatchString(tiraMoeda(strings.TrimSpace(f))) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // detectaDecimalEntrada decide o separador decimal olhando as colunas numéricas: vírgula se algum
 // valor tem a forma 1250,50 ou 1.250,50 e nenhum tem a forma 1250.50 (um ponto com 3 casas depois,
 // como em 1.250, é ambíguo e não conta); caso contrário, ponto. Com delimitador vírgula, a vírgula
@@ -213,7 +272,7 @@ func detectaDecimalEntrada(regs [][]string, cols []report.InputCol, delim rune) 
 			if j >= len(cols) || !tiposNumericos[cols[j].Type] {
 				continue
 			}
-			f = strings.TrimSpace(f)
+			f = tiraMoeda(strings.TrimSpace(f))
 			switch {
 			case reDecVirgula.MatchString(f):
 				virgula++

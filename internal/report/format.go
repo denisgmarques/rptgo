@@ -104,6 +104,14 @@ func FmtMascara(v Value, mask string) (string, error) {
 	restantes := []byte(digInt)
 	sinalImpresso, moedaImpressa := false, false
 	moeda := cfg("CURRSYM", "$")
+	// separador de milhar (TRIADSEP, padrão vírgula): ocupa uma posição da máscara, então só o
+	// primeiro byte conta; vazio vira espaço.
+	triada := byte(',')
+	if v := cfg("TRIADSEP", ","); v == "" {
+		triada = ' '
+	} else {
+		triada = v[0]
+	}
 	for pos := len(ip) - 1; pos >= 0; pos-- {
 		ch := ip[pos]
 		switch {
@@ -159,7 +167,7 @@ func FmtMascara(v Value, mask string) (string, error) {
 			}
 		case ch == ',':
 			if len(restantes) > 0 {
-				res[pos] = ','
+				res[pos] = triada
 			} else {
 				res[pos] = ' '
 			}

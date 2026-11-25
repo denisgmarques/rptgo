@@ -1,0 +1,7 @@
+/* Auxiliar do run.sh: da lista de anos de um modelo (JSON da API), imprime so o codigo de cada
+   ano, um por linha, para o shell montar a proxima chamada. Roda com --format csv --csv-no-header. */
+input
+   code  [string 12]
+detail
+   print code
+end

@@ -186,3 +186,37 @@ func TestExemploInvoiceHTML(t *testing.T) {
 		t.Errorf("esperava erro de variável desconhecida: code=%d %q", code, errb)
 	}
 }
+
+func TestExemploFipe(t *testing.T) {
+	dir := dirExemplos + "fipe-veiculos/"
+	code, out, errb := executa(t, "", "--input", "json", dir+"relatorio.rp", dir+"dados-exemplo.json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb)
+	}
+	// marcas em ordem, modelos em ordem dentro da marca e anos em ordem dentro do modelo
+	ordem := []string{"MARCA Aurora", "Cometa 1.0 Flex 12V 4p Mec.", "R$ 61.870,00", "R$ 67.240,00", "R$ 72.915,00",
+		"Cometa 1.6 Flex 16V 4p Aut.", "Duna 2.0 Turbo 16V 5p Aut.", "Total de versoes de Aurora",
+		"MARCA Brisa", "Onda 1.0 Flex 8V 4p", "Total de versoes de Brisa", "MARCA Cedro", "Pampa 2.8 Diesel 4x4 CD Mec."}
+	pos := -1
+	for _, want := range ordem {
+		i := strings.Index(out[pos+1:], want)
+		if i < 0 {
+			t.Fatalf("faltou %q, ou fora de ordem, depois da posição %d:\n%s", want, pos, out)
+		}
+		pos += 1 + i
+	}
+	for _, want := range []string{"Referencia: novembro de 2026", "990001-1", "R$ 219.870,00"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("saída sem %q", want)
+		}
+	}
+	if n := strings.Count(out, "Versoes listadas:"); n != 6 {
+		t.Errorf("%d modelos, esperados 6", n)
+	}
+	// o script auxiliar: só os códigos dos anos, um por linha, sem layout
+	code, anos, errb := executa(t, `[{"code":"1985-1","name":"1985 Gasolina"},{"code":"1986-1","name":"1986 Gasolina"}]`,
+		"--input", "json", "--format", "csv", "--csv-no-header", dir+"anos.rp", "-")
+	if code != 0 || anos != "1985-1\n1986-1\n" {
+		t.Errorf("anos.rp: code=%d %q %q", code, anos, errb)
+	}
+}
