@@ -82,10 +82,12 @@ Fonte dos dados (padrão: texto com campos separados por '|', ou pelo 'separator
       --input FONTE              delimited (padrão), csv ou json. csv lê aspas do RFC 4180;
                                  json lê um array de objetos (ou um objeto por linha) e liga
                                  cada coluna do input à chave de mesmo nome
-      --input-delimiter CARACTERE  delimitador do CSV de entrada (padrão: vírgula)
-      --input-decimal CARACTERE  separador decimal dos números na entrada: . (padrão) ou ,
-                                 (com , lê 1.250,50 como 1250.50); CSV do Excel brasileiro:
-                                 --input csv --input-delimiter ';' --input-decimal ',' --encoding latin-1
+      --input-delimiter CARACTERE  delimitador do CSV de entrada: ; , | tab ou auto (padrão: detecta
+                                 pelo número de colunas do input; aspas são sempre aceitas)
+      --input-decimal CARACTERE  separador decimal dos números na entrada: . (padrão), , ou auto
+                                 (com , lê 1.250,50 como 1250.50; auto escolhe pelos valores);
+                                 CSV do Excel brasileiro: --input csv --input-decimal auto
+                                 --encoding latin-1
 
 Opções de --format csv (padrão: RFC 4180, vírgula, aspas só quando necessárias):
       --csv-delimiter CARACTERE  delimitador dos campos: ; | tab ... (padrão: vírgula)
@@ -437,7 +439,10 @@ Sul,Gina Rocha,310.1
 
 ### 5. Fontes de dados: texto, CSV do Excel e JSON
 
-O mesmo script lê qualquer fonte; só muda a opção `--input`. O JSON pode ser um array de objetos
+O mesmo script lê qualquer fonte; só muda a opção `--input`. No CSV, o delimitador (`,`, `;`,
+tab ou `|`) é detectado sozinho: o `rptgo` escolhe o que divide as primeiras linhas exatamente
+no número de colunas do `input`, e aspas não precisam de opção, pois campos com e sem aspas
+convivem no mesmo arquivo. O JSON pode ser um array de objetos
 (inclusive o que o próprio `--format json` gera) ou um objeto por linha; cada coluna do `input`
 busca a chave de mesmo nome, e chave ausente ou `null` vira campo vazio. O CSV aceita campos
 entre aspas, com delimitador e quebra de linha dentro, BOM e CRLF.
@@ -481,12 +486,12 @@ Os dois produzem exatamente o mesmo relatório do exemplo 1 de dados em texto. O
 pelo Excel com configuração regional brasileira usa `;` como delimitador e vírgula decimal
 (`1.250,50`). O RPT original só lê o ponto como separador decimal na entrada (o `RADIXSEP` só
 muda a exibição dos valores `amount`), então `--input-decimal ','` é uma extensão do `rptgo`,
-desligada por padrão. A opção "CSV (separado por vírgulas)" antiga grava em Windows-1252: nesse caso
-junte `--encoding latin-1`. O arquivo de exemplo
+desligada por padrão (`auto` a liga só se os valores tiverem a forma `1250,50`). A opção
+"CSV (separado por vírgulas)" antiga grava em Windows-1252: nesse caso junte `--encoding latin-1`. O arquivo de exemplo
 [`dados-excel-br.csv`](examples/relatorio-vendas-regiao/dados-excel-br.csv) está nesse formato:
 
 ```text
-﻿regiao;vendedor;valor
+regiao;vendedor;valor
 Sul;Ana Souza;1.250,50
 Norte;Bruno Lima;980,00
 Sul;Carla Dias;2.100,75
@@ -498,7 +503,7 @@ Sul;Gina Rocha;310,10
 
 <!-- run -->
 ```sh
-./rptgo --input csv --input-delimiter ';' --input-decimal ',' examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados-excel-br.csv
+./rptgo --input csv --input-decimal auto examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados-excel-br.csv
 ```
 <!-- expect -->
 ```text
@@ -573,8 +578,9 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 - `--input delimited|csv|json` — fonte dos dados (padrão: `delimited`, texto com o separador do
   script). `csv` lê aspas do RFC 4180 e `json` lê um array de objetos (ou um objeto por linha),
   ligando cada coluna do `input` à chave de mesmo nome (sem diferenciar maiúsculas).
-  `--input-delimiter CARACTERE` (`;`, `|`, `tab`...) escolhe o delimitador do CSV e
-  `--input-decimal ,` lê números como `1.250,50`. Veja "Fontes de dados".
+  `--input-delimiter CARACTERE` (`;`, `|`, `tab`...) fixa o delimitador do CSV; sem ele (ou com
+  `auto`) o `rptgo` detecta pelo número de colunas do `input`. `--input-decimal ,` lê números
+  como `1.250,50` e `--input-decimal auto` escolhe pelos valores. Veja "Fontes de dados".
 - `--csv-delimiter`, `--csv-quote minimal|strings|all`, `--csv-decimal`, `--csv-no-header` —
   apresentação do `--format csv`: delimitador (`;`, `tab`...), aspas só quando necessárias
   (padrão), em todo texto e no cabeçalho (`strings`) ou em todos os campos (`all`), vírgula

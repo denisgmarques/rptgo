@@ -118,9 +118,15 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	report.DefFonteDados(dados)
 
 	var registros [][]string
+	var delimCSV rune
 	switch op.input {
 	case entradaCSV:
-		delim, _ := delimitadorCSV(valorOu(op.inputDelim, ","))
+		if op.inputDelim == "" || op.inputDelim == "auto" {
+			delimCSV = detectaDelimitadorCSV(dados, len(script.Input))
+		} else {
+			delimCSV, _ = delimitadorCSV(op.inputDelim)
+		}
+		delim := delimCSV
 		registros, err = leRegistrosCSV(dados, delim, strings.ToLower(script.Input[0].Name), op.header)
 	case entradaJSON:
 		nomes := make([]string, len(script.Input))
@@ -136,7 +142,15 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
-	if op.inputDec == "," {
+	decimal := op.inputDec
+	if decimal == "auto" {
+		decimal = string(detectaDecimalEntrada(registros, script.Input, delimCSV))
+	}
+	if decimal == "," {
+		if op.input == entradaCSV && delimCSV == ',' {
+			fmt.Fprintln(erroPadrao, nomePrograma+": o decimal \",\" não pode ser usado com o delimitador vírgula; use --input-delimiter ';'")
+			return 1
+		}
 		ajustaDecimalEntrada(registros, script.Input)
 	}
 
@@ -346,8 +360,10 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			if err != nil {
 				return op, nil, err
 			}
-			if _, err := delimitadorCSV(v); err != nil {
-				return op, nil, fmt.Errorf("--input-delimiter: %v", err)
+			if v != "auto" {
+				if _, err := delimitadorCSV(v); err != nil {
+					return op, nil, fmt.Errorf("--input-delimiter: %v", err)
+				}
 			}
 			op.inputDelim = v
 		case "--input-decimal":
@@ -355,8 +371,8 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			if err != nil {
 				return op, nil, err
 			}
-			if v != "." && v != "," {
-				return op, nil, fmt.Errorf("valor inválido para --input-decimal: %s (use . ou ,)", v)
+			if v != "." && v != "," && v != "auto" {
+				return op, nil, fmt.Errorf("valor inválido para --input-decimal: %s (use ., , ou auto)", v)
 			}
 			op.inputDec = v
 		case "--csv-delimiter":
@@ -442,7 +458,7 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 	if op.inputDec != "" && op.input == entradaJSON {
 		return op, nil, fmt.Errorf("--input-decimal não vale com --input json (os números do JSON já são números)")
 	}
-	if op.inputDec == "," && op.input == entradaCSV && valorOu(op.inputDelim, ",") == "," {
+	if op.inputDec == "," && op.input == entradaCSV && (op.inputDelim == "," || op.inputDelim == "comma") {
 		return op, nil, fmt.Errorf("--input-decimal \",\" e o delimitador do CSV de entrada não podem ser a vírgula; use --input-delimiter ';'")
 	}
 	if op.inputDelim != "" && op.input != entradaCSV {

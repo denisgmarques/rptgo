@@ -234,7 +234,7 @@ func TestInputDecimalValidacoes(t *testing.T) {
 	for _, args := range [][]string{
 		{"--input-decimal", ";", rp, dat},
 		{"--input", "json", "--input-decimal", ",", rp, dat},
-		{"--input", "csv", "--input-decimal", ",", rp, dat}, // delimitador padrão do CSV é a vírgula
+		{"--input", "csv", "--input-delimiter", ",", "--input-decimal", ",", rp, dat}, // a vírgula não pode ser os dois
 	} {
 		code, out, errb := executa(t, "", args...)
 		if code != 2 || out != "" || !strings.HasPrefix(errb, "rptgo: ") {
@@ -243,5 +243,100 @@ func TestInputDecimalValidacoes(t *testing.T) {
 	}
 	if code, _, errb := executa(t, "", "--input-decimal", ",", rp, dat); code != 0 {
 		t.Errorf("--input-decimal com texto delimitado: code=%d %q", code, errb)
+	}
+}
+
+func TestDetectaDelimitadorCSV(t *testing.T) {
+	casos := []struct {
+		nome, texto string
+		ncols       int
+		want        rune
+	}{
+		{"vírgula", "a,b,c\n1,2,3\n4,5,6\n", 3, ','},
+		{"ponto e vírgula", "a;b;c\n1;2;3\n", 3, ';'},
+		{"tab", "a\tb\tc\n1\t2\t3\n", 3, '\t'},
+		{"barra vertical", "a|b|c\n1|2|3\n", 3, '|'},
+		{"ponto e vírgula com vírgula decimal", "nome;valor;x\nAna;1250,50;a\nBeto;980,5;b\n", 3, ';'},
+		{"vírgula com ponto e vírgula entre aspas", "nome,obs,x\nAna,\"a; b; c\",1\nBeto,\"d;e\",2\n", 3, ','},
+		{"ponto e vírgula com vírgula entre aspas", "nome;obs;x\n\"Souza, Ana\";\"a, b, c\";1\n\"Lima, Bia\";x;2\n", 3, ';'},
+		{"sem aspas e com aspas no mesmo arquivo", "nome;obs;x\nAna;\"com; ponto\";1\nBeto;simples;2\n", 3, ';'},
+		{"BOM e CRLF", "\xEF\xBB\xBFnome;valor\r\nAna;1\r\n", 2, ';'},
+		{"número de colunas diferente do input: vence o mais consistente", "a;b;c;d\n1;2;3;4\n5;6;7;8\n", 3, ';'},
+		{"uma coluna só: vírgula", "nome\nAna\nBeto\n", 1, ','},
+		{"vazio: vírgula", "", 3, ','},
+	}
+	for _, c := range casos {
+		if got := detectaDelimitadorCSV(c.texto, c.ncols); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.nome, got, c.want)
+		}
+	}
+}
+
+func TestDetectaDecimalEntrada(t *testing.T) {
+	cols := []report.InputCol{{Name: "t", Type: "string"}, {Name: "v", Type: "amount"}}
+	casos := []struct {
+		nome  string
+		regs  [][]string
+		delim rune
+		want  rune
+	}{
+		{"vírgula decimal", [][]string{{"a", "1250,50"}, {"b", "980,5"}}, ';', ','},
+		{"vírgula decimal com ponto de milhar", [][]string{{"a", "1.250,50"}, {"b", "3"}}, ';', ','},
+		{"ponto decimal", [][]string{{"a", "1250.50"}, {"b", "980.5"}}, ';', '.'},
+		{"só inteiros: ponto", [][]string{{"a", "1"}, {"b", "2"}}, ';', '.'},
+		{"ponto com 3 casas é ambíguo e não conta", [][]string{{"a", "1.250"}, {"b", "3,5"}}, ';', ','},
+		{"mistura: prevalece o ponto", [][]string{{"a", "1,5"}, {"b", "2.75"}}, ';', '.'},
+		{"delimitador vírgula nunca dá vírgula decimal", [][]string{{"a", "1,5"}}, ',', '.'},
+		{"texto não conta", [][]string{{"1,5", "2"}}, ';', '.'},
+	}
+	for _, c := range casos {
+		if got := detectaDecimalEntrada(c.regs, cols, c.delim); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.nome, got, c.want)
+		}
+	}
+}
+
+func TestExecutarCSVComDeteccaoAutomatica(t *testing.T) {
+	dir := t.TempDir()
+	rp := filepath.Join(dir, "s.rp")
+	writeFile(t, rp, "input\n  nome [string 20],\n  obs [string 20],\n  valor [amount 10]\nsort nome\ndetail\n  print nome in col 1, obs in col 22, valor in col 44 using '###,##&.&&'\nend\n")
+	casos := []struct {
+		nome, dados string
+		args        []string
+		quer        []string
+	}{
+		{"vírgula sem flags", "nome,obs,valor\nAna,\"x; y\",1250.5\nBeto,z,3\n", nil, []string{"Ana", "x; y", "1,250.50", "Beto"}},
+		{"ponto e vírgula sem flags", "nome;obs;valor\n\"Silva, Ana\";\"a, b\";1250.5\nBeto;z;3\n", nil, []string{"Silva, Ana", "a, b", "1,250.50"}},
+		{"tab sem flags", "nome\tobs\tvalor\nAna\tx\t7\n", nil, []string{"Ana", "7.00"}},
+		{"excel brasileiro: delimitador e decimal automáticos", "nome;obs;valor\r\nJosé;ok;1.250,50\r\nAna;ok;980,5\r\n", []string{"--input-decimal", "auto"}, []string{"José", "1,250.50", "980.50"}},
+		{"decimal auto com ponto decimal continua ponto", "nome;obs;valor\nAna;ok;1250.5\n", []string{"--input-decimal", "auto"}, []string{"1,250.50"}},
+		{"auto explícito", "nome;obs;valor\nAna;ok;5\n", []string{"--input-delimiter", "auto"}, []string{"Ana", "5.00"}},
+	}
+	for _, c := range casos {
+		dat := filepath.Join(dir, "d.csv")
+		writeFile(t, dat, c.dados)
+		args := append([]string{"--input", "csv"}, c.args...)
+		args = append(args, rp, dat)
+		code, out, errb := executa(t, "", args...)
+		if code != 0 {
+			t.Errorf("%s: exit %d: %s", c.nome, code, errb)
+			continue
+		}
+		for _, want := range c.quer {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s: saída sem %q:\n%s", c.nome, want, out)
+			}
+		}
+	}
+	// o delimitador explícito vence a detecção
+	dat := filepath.Join(dir, "d.csv")
+	writeFile(t, dat, "nome;obs;valor\nAna;ok;1\n")
+	if code, _, errb := executa(t, "", "--input", "csv", "--input-delimiter", ",", rp, dat); code != 1 || !strings.Contains(errb, "phase error") {
+		t.Errorf("delimitador explícito errado deveria dar phase error: code=%d %q", code, errb)
+	}
+	// vírgula decimal com delimitador vírgula detectado: erro claro, sem converter nada
+	writeFile(t, dat, "nome,obs,valor\nAna,ok,1\n")
+	if code, _, errb := executa(t, "", "--input", "csv", "--input-decimal", ",", rp, dat); code != 1 || !strings.Contains(errb, "delimitador vírgula") {
+		t.Errorf("decimal vírgula com delimitador vírgula: code=%d %q", code, errb)
 	}
 }

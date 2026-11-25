@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"rptgo/internal/report"
@@ -143,4 +144,86 @@ func ajustaDecimalEntrada(regs [][]string, cols []report.InputCol) {
 			reg[j] = strings.Replace(f, ",", ".", 1)
 		}
 	}
+}
+
+// detectaDelimitadorCSV escolhe o delimitador de um CSV olhando o começo do arquivo: para cada
+// candidato (; , tab |) lê até 30 registros com as regras de aspas do CSV e conta quantos têm
+// exatamente ncols campos (o número de colunas do input do script). Vence o candidato com mais
+// registros certos; se nenhum acerta, vence o que dá mais registros com o mesmo número de campos
+// (>= 2) do primeiro, e o motor reporta a diferença de colunas. Sem pistas, vírgula.
+// Aspas não precisam ser detectadas: o leitor de CSV trata campos com e sem aspas no mesmo arquivo.
+func detectaDelimitadorCSV(texto string, ncols int) rune {
+	const limite = 64 << 10
+	amostra := strings.TrimPrefix(texto, "\xEF\xBB\xBF")
+	if len(amostra) > limite {
+		amostra = amostra[:limite]
+		if i := strings.LastIndex(amostra, "\n"); i > 0 {
+			amostra = amostra[:i]
+		}
+	}
+	candidatos := []rune{';', ',', '\t', '|'}
+	melhor, melhorScore := ',', 0
+	for pass := 0; pass < 2 && melhorScore == 0; pass++ {
+		for _, d := range candidatos {
+			r := csv.NewReader(strings.NewReader(amostra))
+			r.Comma = d
+			r.FieldsPerRecord = -1
+			r.LazyQuotes = true
+			score, primeiro := 0, -1
+			for i := 0; i < 30; i++ {
+				reg, err := r.Read()
+				if err != nil {
+					break
+				}
+				if primeiro < 0 {
+					primeiro = len(reg)
+				}
+				if pass == 0 && ncols >= 2 && len(reg) == ncols {
+					score++
+				}
+				if pass == 1 && primeiro >= 2 && len(reg) == primeiro {
+					score++
+				}
+			}
+			if score > melhorScore {
+				melhor, melhorScore = d, score
+			}
+		}
+	}
+	return melhor
+}
+
+var (
+	reDecVirgula = regexp.MustCompile(`^-?(\d{1,3}(\.\d{3})+|\d+),\d+$`)
+	reDecPonto   = regexp.MustCompile(`^-?\d+\.\d+$`)
+	reMilhar     = regexp.MustCompile(`^-?\d{1,3}(\.\d{3})+$`)
+)
+
+// detectaDecimalEntrada decide o separador decimal olhando as colunas numéricas: vírgula se algum
+// valor tem a forma 1250,50 ou 1.250,50 e nenhum tem a forma 1250.50 (um ponto com 3 casas depois,
+// como em 1.250, é ambíguo e não conta); caso contrário, ponto. Com delimitador vírgula, a vírgula
+// não pode ser decimal.
+func detectaDecimalEntrada(regs [][]string, cols []report.InputCol, delim rune) rune {
+	if delim == ',' {
+		return '.'
+	}
+	virgula, ponto := 0, 0
+	for _, reg := range regs {
+		for j, f := range reg {
+			if j >= len(cols) || !tiposNumericos[cols[j].Type] {
+				continue
+			}
+			f = strings.TrimSpace(f)
+			switch {
+			case reDecVirgula.MatchString(f):
+				virgula++
+			case reDecPonto.MatchString(f) && !reMilhar.MatchString(f):
+				ponto++
+			}
+		}
+	}
+	if virgula > 0 && ponto == 0 {
+		return ','
+	}
+	return '.'
 }

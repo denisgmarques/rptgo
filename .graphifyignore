@@ -1,0 +1,6 @@
+# Sample data, reference outputs and images add noise to the knowledge graph.
+examples/*/dados*
+examples/*/data*
+examples/*/*.svg
+internal/report/testdata/
+docs/images/
