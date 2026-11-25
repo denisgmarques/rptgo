@@ -611,6 +611,9 @@ func (it *Interp) ehColBool(e Expr) bool {
 }
 
 func (it *Interp) ehLdate(e Expr) bool {
+	if _, ok := e.(TodayExpr); ok {
+		return !it.Strict // 'today' imprime o ano com 4 dígitos, salvo com --strict
+	}
 	col, ok := e.(ColExpr)
 	if !ok {
 		return false

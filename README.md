@@ -79,6 +79,7 @@ Opções:
                                  de linha; com --format text (utf-8 ou cp850) ou html
       --strict                   comentários /* */ abrem e fecham na mesma linha; com
                                  'before report', o 'header' não roda na 1ª página
+                                 e 'today' imprime o ano com 2 dígitos
 
 Fonte dos dados (padrão: texto com campos separados por '|', ou pelo 'separator' do script):
       --input FONTE              delimited (padrão), csv ou json. csv lê aspas do RFC 4180;

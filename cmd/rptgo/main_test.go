@@ -384,3 +384,18 @@ func TestHeaderRodaNaPrimeiraPaginaComBeforeReport(t *testing.T) {
 		t.Errorf("com --strict o header não roda na 1ª página:\n%s", estrito)
 	}
 }
+
+func TestTodayImprimeQuatroDigitosSalvoComStrict(t *testing.T) {
+	dir := t.TempDir()
+	rp := dir + "/r.rp"
+	writeFile(t, rp, "input\n  n [numeric]\nleft margin 0\ndetail\n  print today, today - 1\nend\n")
+	writeFile(t, dir+"/d.txt", "1\n")
+	_, padrao, _ := executa(t, "", rp, dir+"/d.txt")
+	if !strings.Contains(padrao, "24/11/2026 23/11/26") {
+		t.Errorf("today sozinho deve imprimir 4 dígitos:\n%s", padrao)
+	}
+	_, estrito, _ := executa(t, "", "--strict", rp, dir+"/d.txt")
+	if !strings.Contains(estrito, "24/11/26 23/11/26") {
+		t.Errorf("com --strict today imprime 2 dígitos:\n%s", estrito)
+	}
+}

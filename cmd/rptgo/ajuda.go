@@ -50,6 +50,7 @@ func textoAjuda(nome string) string {
 	b.WriteString("                                 de linha; com --format text (utf-8 ou cp850) ou html\n")
 	b.WriteString("      --strict                   comentários /* */ abrem e fecham na mesma linha; com\n")
 	b.WriteString("                                 'before report', o 'header' não roda na 1ª página\n")
+	b.WriteString("                                 e 'today' imprime o ano com 2 dígitos\n")
 	b.WriteString("\nFonte dos dados (padrão: texto com campos separados por '|', ou pelo 'separator' do script):\n")
 	b.WriteString("      --input FONTE              delimited (padrão), csv ou json. csv lê aspas do RFC 4180;\n")
 	b.WriteString("                                 json lê um array de objetos (ou um objeto por linha) e liga\n")

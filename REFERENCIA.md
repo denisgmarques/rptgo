@@ -1483,7 +1483,7 @@ end
 
 | Nome | Valor |
 |---|---|
-| `today` | a data de hoje (`date`) |
+| `today` | a data de hoje (`ldate`, com ano de 4 dígitos; com `--strict` é `date`, com 2) |
 | `hour` | a hora de agora (`time`) |
 | `pageno` | o número da página atual, começando em 1 |
 
@@ -1504,7 +1504,7 @@ end
 ```
 <!-- output -->
 ```text
-hoje 24/11/26 hora 17:47 pagina 1
+hoje 24/11/2026 hora 17:47 pagina 1
 ```
 
 ---
@@ -1701,15 +1701,16 @@ end
 
 ## 11. Modo `--strict`
 
-A opção `--strict` liga duas regras mais rígidas. Sem ela, o `rptgo` é mais permissivo.
+A opção `--strict` liga três regras mais rígidas. Sem ela, o `rptgo` é mais permissivo.
 
 | | Sem `--strict` (padrão) | Com `--strict` |
 |---|---|---|
 | Comentários `/* */` | podem ocupar várias linhas | precisam abrir e fechar na mesma linha |
 | `header` na 1ª página, com `before report` no script | roda, logo depois do `before report` | **não** roda: o `before report` ocupa o lugar dele |
+| `today` impresso sozinho | `ldate`: ano de 4 dígitos (`24/11/2026`) | `date`: ano de 2 dígitos (`24/11/26`) |
 
-Scripts sem comentários de várias linhas e sem `before report` junto com `header` saem iguais nos dois
-modos.
+Scripts sem comentários de várias linhas, sem `before report` junto com `header` e sem `print today`
+saem iguais nos dois modos.
 
 ### Comentários de uma linha só
 
