@@ -157,6 +157,9 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	}
 
 	it, err := report.NovoInterp(script, registros, op.formFeed)
+	if it != nil {
+		it.Strict = op.strict
+	}
 	if err != nil {
 		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1

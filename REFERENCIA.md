@@ -22,8 +22,9 @@ esquerda e sem as linhas em branco que completam a página.
 8. [Funções](#8-funções)
 9. [Máscaras de impressão (`using`)](#9-máscaras-de-impressão-using)
 10. [Configuração por variáveis de ambiente](#10-configuração-por-variáveis-de-ambiente)
-11. [Mensagens de erro comuns](#11-mensagens-de-erro-comuns)
-12. [Resumo rápido](#12-resumo-rápido)
+11. [Modo `--strict`](#11-modo---strict)
+12. [Mensagens de erro comuns](#12-mensagens-de-erro-comuns)
+13. [Resumo rápido](#13-resumo-rápido)
 
 ---
 
@@ -57,7 +58,8 @@ Beto     20
 ```
 
 **Comentários** vão entre `/*` e `*/`. Por padrão podem ocupar várias linhas; com a opção
-`--strict` precisam abrir e fechar na mesma linha.
+`--strict` precisam abrir e fechar na mesma linha (essa opção também muda o `header`: veja a
+seção 11).
 
 <!-- script -->
 ```text
@@ -187,7 +189,7 @@ uma coluna é aceita e ignorada.
 
 Um campo vazio é **nulo** em qualquer tipo (o texto vazio também conta como nulo no `is null`).
 Nulos imprimem em branco, exceto o `bool`, que imprime `***`. Um valor inválido para o tipo, como
-`abc` numa coluna numérica, interrompe o relatório com um erro que mostra o registro (seção 11).
+`abc` numa coluna numérica, interrompe o relatório com um erro que mostra o registro (seção 12).
 
 Exemplo com todos os tipos, num registro completo e num com campos vazios:
 
@@ -661,9 +663,11 @@ cabecalho, pagina 2
 rodape, pagina 2
 ```
 
-**Atenção ao `before report`.** Na primeira página o `header` só roda se o script **não** tiver
-`before report`. Quando existe um `before report`, ele ocupa o lugar do cabeçalho na primeira
-página (as páginas seguintes têm o `header` normalmente). É um bom lugar para um título.
+**`before report` e `header`.** O `before report` roda **antes** do `header` na primeira página, e
+o `header` roda em todas as páginas, inclusive na primeira. Assim o `before report` serve para
+inicializar variáveis e imprimir um título, e o cabeçalho é escrito uma única vez, no `header`.
+Com a opção `--strict`, quando o script tem `before report` o `header` **não** roda na primeira
+página (o `before report` ocupa o lugar dele); veja a [seção 11](#11-modo---strict).
 
 <!-- script -->
 ```text
@@ -694,6 +698,26 @@ end
 7
 ```
 <!-- output -->
+```text
+TITULO DO RELATORIO
+cabecalho, pagina 1
+1
+2
+3
+4
+rodape, pagina 1
+cabecalho, pagina 2
+5
+6
+7
+
+
+rodape, pagina 2
+```
+
+Com `--strict`, o `header` não roda na primeira página, porque o script tem `before report`:
+
+<!-- output: --strict -->
 ```text
 TITULO DO RELATORIO
 1
@@ -1675,7 +1699,100 @@ end
 
 ---
 
-## 11. Mensagens de erro comuns
+## 11. Modo `--strict`
+
+A opção `--strict` liga duas regras mais rígidas. Sem ela, o `rptgo` é mais permissivo.
+
+| | Sem `--strict` (padrão) | Com `--strict` |
+|---|---|---|
+| Comentários `/* */` | podem ocupar várias linhas | precisam abrir e fechar na mesma linha |
+| `header` na 1ª página, com `before report` no script | roda, logo depois do `before report` | **não** roda: o `before report` ocupa o lugar dele |
+
+Scripts sem comentários de várias linhas e sem `before report` junto com `header` saem iguais nos dois
+modos.
+
+### Comentários de uma linha só
+
+No padrão, um comentário pode se estender por várias linhas. Com `--strict`, o mesmo script dá erro:
+
+<!-- script -->
+```text
+/* comentario
+   em duas linhas */
+input
+   n [numeric]
+detail
+   print n
+end
+```
+<!-- data -->
+```text
+1
+```
+<!-- error: --strict -->
+```text
+rptgo: linha 1: comentário precisa abrir e fechar na mesma linha (--strict)
+  1 | /* comentario
+      ^^^^^^^^^^^^^
+```
+
+Para passar no modo estrito, feche o comentário na mesma linha em que ele abre, ou use um comentário
+por linha.
+
+### O `header` na primeira página
+
+No padrão, o `before report` roda primeiro e o `header` vem logo depois, então o cabeçalho é escrito
+uma vez só, no `header`, e o `before report` fica para o título e para inicializar variáveis:
+
+<!-- script -->
+```text
+input
+   n [numeric]
+length 7
+top margin 0
+bottom margin 0
+left margin 0
+before report
+   print 'TITULO'
+header
+   print 'CABECALHO'
+detail
+   print n
+end
+```
+<!-- data -->
+```text
+1
+2
+3
+```
+<!-- output -->
+```text
+TITULO
+CABECALHO
+1
+2
+3
+```
+
+Com `--strict`, o `header` não roda na primeira página, porque o script tem `before report`. As
+páginas seguintes continuam com o `header`:
+
+<!-- output: --strict -->
+```text
+TITULO
+1
+2
+3
+```
+
+Use `--strict` para rodar scripts que dependem da regra estrita, em que o `before report` imprime o
+cabeçalho da primeira página e o `header` só cuida das demais. Se o `before report` já repete o
+cabeçalho que está no `header`, rode sem a opção e tire a cópia.
+
+---
+
+## 12. Mensagens de erro comuns
 
 Os erros de sintaxe e de tipo aparecem antes de o relatório rodar; os de dados e os de execução,
 quando o registro problemático é lido ou calculado. Todos mostram a linha envolvida.
@@ -1830,7 +1947,7 @@ ou fim menor que o início.
 
 ---
 
-## 12. Resumo rápido
+## 13. Resumo rápido
 
 **Estrutura**
 

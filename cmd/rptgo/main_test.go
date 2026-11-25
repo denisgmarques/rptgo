@@ -369,3 +369,18 @@ func TestCSVOpcoesValidacoes(t *testing.T) {
 		}
 	}
 }
+
+func TestHeaderRodaNaPrimeiraPaginaComBeforeReport(t *testing.T) {
+	dir := t.TempDir()
+	rp := dir + "/r.rp"
+	writeFile(t, rp, "input\n  n [numeric]\nleft margin 0\nbefore report\n  print 'TITULO'\nheader\n  print 'CAB'\ndetail\n  print n\nend\n")
+	writeFile(t, dir+"/d.txt", "1\n2\n")
+	_, padrao, _ := executa(t, "", rp, dir+"/d.txt")
+	if !strings.Contains(padrao, "TITULO\nCAB\n1") {
+		t.Errorf("o header deve rodar logo depois do before report:\n%s", padrao)
+	}
+	_, estrito, _ := executa(t, "", "--strict", rp, dir+"/d.txt")
+	if strings.Contains(estrito, "CAB") || !strings.Contains(estrito, "TITULO\n1") {
+		t.Errorf("com --strict o header não roda na 1ª página:\n%s", estrito)
+	}
+}

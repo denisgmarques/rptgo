@@ -49,6 +49,10 @@ type Interp struct {
 	quebrando bool
 	altRodape int
 
+	// Strict: com 'before report' no script, a primeira página não roda o 'header'.
+	// Por padrão o 'header' roda sempre, logo depois do 'before report'.
+	Strict bool
+
 	agora time.Time
 	rows  []Row
 }
@@ -892,6 +896,13 @@ func (it *Interp) executa() error {
 			if corpo, ok := sec("before", "report"); ok {
 				if err := roda(corpo, ok, r, nil); err != nil {
 					return err
+				}
+				if cab, temCab := sec("header", ""); temCab && !it.Strict {
+					it.row = r
+					if err := it.exec(cab); err != nil {
+						return err
+					}
+					it.flush()
 				}
 			}
 		} else {
