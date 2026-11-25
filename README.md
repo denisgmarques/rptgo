@@ -39,9 +39,12 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 
 ## Primeiros passos
 
-Três exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
+Seis exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
 total e contagem por grupo), `relatorio-estoque-categoria/` (duas quebras em cascata, com
-`count`, `total` e `avg`) e `cadastro-clientes/` (datas, `bool` e valores nulos). Todos usam
+`count`, `total` e `avg`), `cadastro-clientes/` (datas, `bool` e valores nulos) e três
+exemplos de negócio em inglês: `payroll-by-department/` (folha por departamento, `if` com
+`bool` e `where` nos agregados), `invoice-aging/` (contas a receber com prazos e faixas de
+atraso) e `purchase-orders/` (cliente > pedido > itens, com totais e frete). Todos usam
 dados fictícios e não chamam `today`/`hour`, então a saída é sempre a mesma. A partir da raiz
 do repositório:
 
@@ -208,7 +211,7 @@ cmd/rptgo/          interface de linha de comando
   cp850.go          tabela da página de código CP850 (--encoding cp850)
   csv.go            saída --format csv
   json.go           saída --format json
-examples/           relatórios de exemplo (vendas por região, estoque por categoria, cadastro de clientes)
+examples/           relatórios de exemplo (vendas, estoque, cadastro, folha, contas a receber, pedidos)
 internal/report/
   lexer.go          análise léxica (tokens, comentários, literais de data/repetição)
   parser.go         análise sintática recursiva descendente -> AST

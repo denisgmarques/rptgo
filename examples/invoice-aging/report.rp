@@ -1,0 +1,39 @@
+/* Accounts receivable: open invoices per customer with payment terms in days
+   (due - issued) and a flag for invoices that are 30 days or more past due at the
+   as-of date. The as-of date is a constant so the output never changes. Date literals follow
+   DATEFMT, so run it with the default DD/MM/YY (or adjust the literal). */
+input
+   customer  [string 16],
+   invoice   [string 8],
+   issued    [ldate 10],
+   due       [ldate 10],
+   amount    [amount 10],
+   paid      [bool]
+
+width 74
+length 40
+sort <cust> customer
+
+before report
+   print 'OPEN INVOICES (AS OF 2026-06-30)' centered
+   print 'Invoice' in col 1, 'Issued' in col 12, 'Due' in col 24, 'Terms' in col 36, 'Amount' in col 49, 'Status' in col 62
+   print 68[-] in col 1
+
+before cust
+   print customer in col 1
+
+detail
+   if not paid then
+      begin
+         print invoice in col 3, issued in col 12, due in col 24, due - issued in col 36 using '####&', amount in col 44 using '###,##&.&&' no newline
+         if 30/06/2026 - due >= 30 then print 'OVERDUE 30+' in col 62 else if 30/06/2026 - due > 0 then print 'overdue' in col 62 else print 'current' in col 62
+      end
+
+after cust
+   print 'Open balance:' in col 3, total(amount where not paid) in col 44 using '###,##&.&&'
+   print 'Open invoices:' in col 3, count(* where not paid) in col 44 using '#####&'
+   skip
+
+after report
+   print 'TOTAL OPEN' in col 1, total(amount where not paid) in col 44 using '###,##&.&&'
+end

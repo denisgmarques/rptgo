@@ -1,0 +1,8 @@
+Northwind|PO-2001|WIDGET-A|150|2.40|no
+Northwind|PO-2001|WIDGET-B|40|7.95|no
+Northwind|PO-2002|GADGET-X|3|49.99|yes
+Contoso|PO-2003|BOLT-M8|500|0.18|no
+Contoso|PO-2003|NUT-M8|500|0.07|no
+Contoso|PO-2004|CABLE-2M|12|5.50|no
+Fabrikam|PO-2005|PANEL-LG|2|310.00|yes
+Fabrikam|PO-2005|SCREW-KIT|25|3.20|yes

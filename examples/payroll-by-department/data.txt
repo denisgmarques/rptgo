@@ -1,0 +1,11 @@
+Engineering|Maria Santos|2018-03-12|yes|9200.00
+Engineering|John Carter|2020-07-01|yes|8400.50
+Engineering|Priya Nair|2022-01-17|yes|7600.00
+Engineering|Tom Becker|2015-09-30|no|9800.00
+Finance|Laura Chen|2017-05-22|yes|6800.75
+Finance|Omar Haddad|2019-11-04|yes|5900.00
+Finance|Sven Olsen|2012-02-13|no|7100.00
+Sales|Ana Pereira|2021-06-14|yes|4300.00
+Sales|Luke Turner|2023-02-27|yes|3900.25
+Sales|Zoe Martin|2016-08-08|yes|5200.00
+Sales|Ian Moore|2014-12-01|no|4800.00

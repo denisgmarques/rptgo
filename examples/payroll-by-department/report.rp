@@ -1,0 +1,32 @@
+/* Payroll by department: active employees only, with headcount, total, average and
+   highest salary per department. Inactive employees stay in the data but are skipped. */
+input
+   dept      [string 12],
+   employee  [string 18],
+   hired     [ldate 10],
+   active    [bool],
+   salary    [amount 10]
+
+width 72
+length 40
+sort <dept> dept
+
+before report
+   print 'PAYROLL BY DEPARTMENT' centered
+   print 'Department' in col 1, 'Employee' in col 14, 'Hired' in col 34, 'Salary' in col 52
+   print 60[-] in col 1
+
+detail
+   if active then
+      print dept in col 1, employee in col 14, hired in col 34, salary in col 46 using '###,##&.&&'
+
+after dept
+   print 'Headcount:' in col 14, count(* where active) in col 46 using '#####&'
+   print 'Total:' in col 14, total(salary where active) in col 46 using '###,##&.&&'
+   print 'Average:' in col 14, avg(salary where active) in col 46 using '###,##&.&&'
+   print 'Highest:' in col 14, max(salary where active) in col 46 using '###,##&.&&'
+   skip
+
+after report
+   print 'ALL DEPARTMENTS' in col 1, total(salary where active) in col 46 using '###,##&.&&'
+end

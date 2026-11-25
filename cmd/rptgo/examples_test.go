@@ -81,3 +81,54 @@ func TestExemploCadastroClientes(t *testing.T) {
 		t.Errorf("objetos inesperados: %v", objs)
 	}
 }
+
+// TestExemplosDeNegocio roda os exemplos em inglês nos três formatos: o texto traz os
+// totais esperados e o JSON/CSV tem um registro por linha de dados.
+func TestExemplosDeNegocio(t *testing.T) {
+	casos := []struct {
+		dir     string
+		linhas  int
+		texto   []string
+		jsonKey string
+	}{
+		{"payroll-by-department", 11, []string{"PAYROLL BY DEPARTMENT", "Headcount:", "25,200.50", "ALL DEPARTMENTS", "51,301.50"}, "active"},
+		{"invoice-aging", 8, []string{"OVERDUE 30+", "current", "Open balance:", "TOTAL OPEN", "39,291.50"}, "paid"},
+		{"purchase-orders", 8, []string{"BULK", "Shipping:", "RUSH ORDER", "Customer total:", "ALL ORDERS"}, "rush"},
+	}
+	for _, c := range casos {
+		t.Run(c.dir, func(t *testing.T) {
+			script := dirExemplos + c.dir + "/report.rp"
+			dados := dirExemplos + c.dir + "/data.txt"
+			code, out, errb := executa(t, "", script, dados)
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, errb)
+			}
+			for _, want := range c.texto {
+				if !strings.Contains(out, want) {
+					t.Errorf("texto sem %q:\n%s", want, out)
+				}
+			}
+			code, out, errb = executa(t, "", "--format", "json", script, dados)
+			if code != 0 {
+				t.Fatalf("json: exit %d: %s", code, errb)
+			}
+			var objs []map[string]any
+			if err := json.Unmarshal([]byte(out), &objs); err != nil {
+				t.Fatalf("JSON inválido: %v\n%s", err, out)
+			}
+			if len(objs) != c.linhas {
+				t.Errorf("%d objetos, esperados %d", len(objs), c.linhas)
+			}
+			if _, ok := objs[0][c.jsonKey].(bool); !ok {
+				t.Errorf("%s deveria ser boolean JSON: %v", c.jsonKey, objs[0])
+			}
+			code, out, errb = executa(t, "", "--format", "csv", script, dados)
+			if code != 0 {
+				t.Fatalf("csv: exit %d: %s", code, errb)
+			}
+			if n := len(strings.Split(strings.TrimRight(out, "\n"), "\n")); n != c.linhas+1 {
+				t.Errorf("csv com %d linhas, esperadas %d", n, c.linhas+1)
+			}
+		})
+	}
+}
