@@ -1,0 +1,26 @@
+/* Cadastro de clientes: mostra datas, bool e valores nulos.
+   Em texto e um relatorio simples; com --format json/csv as datas saem como AAAA-MM-DD,
+   bool como true/false e campos vazios como null (JSON) ou vazio (CSV). */
+input
+   id          [numeric 4],
+   nome        [string 16],
+   nascimento  [date 10],
+   cadastro    [ldate 10],
+   ativo       [bool],
+   limite      [amount 10]
+
+width 70
+length 20
+sort id
+
+before report
+   print 'CADASTRO DE CLIENTES' centered
+   print 'Id' in col 1, 'Nome' in col 6, 'Nasc.' in col 24, 'Cadastro' in col 34, 'Ativo' in col 46, 'Limite' in col 56
+   print 68[-] in col 1
+
+detail
+   print id in col 1, nome in col 6, nascimento in col 24, cadastro in col 34, ativo in col 46, limite in col 54 using '###,##&.&&'
+
+after report
+   print 'Clientes ativos:' in col 1, count(* where ativo) in col 20 using '###&'
+end

@@ -39,10 +39,11 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 
 ## Primeiros passos
 
-Dois exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
-total e contagem por grupo) e `relatorio-estoque-categoria/` (duas quebras em cascata, com
-`count`, `total` e `avg`). Ambos usam dados fictícios e não chamam `today`/`hour`, então a
-saída é sempre a mesma. A partir da raiz do repositório:
+Três exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
+total e contagem por grupo), `relatorio-estoque-categoria/` (duas quebras em cascata, com
+`count`, `total` e `avg`) e `cadastro-clientes/` (datas, `bool` e valores nulos). Todos usam
+dados fictícios e não chamam `today`/`hour`, então a saída é sempre a mesma. A partir da raiz
+do repositório:
 
 ```
 go build -o rptgo ./cmd/rptgo
@@ -92,6 +93,58 @@ Norte,Elisa Prado,1320.4
 Sul,Ana Souza,1250.5
 Sul,Carla Dias,2100.75
 Sul,Gina Rocha,310.1
+```
+
+O mesmo script em JSON: um objeto por registro, na ordem do `sort`, com as chaves na ordem do
+`input` e números como números JSON:
+
+```
+./rptgo --format json examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
+```
+
+```
+[
+{"regiao":"Leste","vendedor":"Diego Alves","valor":450.25},
+{"regiao":"Leste","vendedor":"Fabio Neri","valor":780},
+{"regiao":"Norte","vendedor":"Bruno Lima","valor":980},
+{"regiao":"Norte","vendedor":"Elisa Prado","valor":1320.4},
+{"regiao":"Sul","vendedor":"Ana Souza","valor":1250.5},
+{"regiao":"Sul","vendedor":"Carla Dias","valor":2100.75},
+{"regiao":"Sul","vendedor":"Gina Rocha","valor":310.1}
+]
+```
+
+O terceiro exemplo mostra como cada tipo é serializado. Datas (`date` e `ldate`) saem como
+`AAAA-MM-DD`, `bool` como `true`/`false`, e campos vazios como `null`. Em texto, a coluna `bool`
+imprime `YES`/`NO` (e `***` quando nulo) e a coluna `date` mostra o ano com 2 dígitos:
+
+```
+./rptgo --format json examples/cadastro-clientes/relatorio.rp examples/cadastro-clientes/dados.txt
+```
+
+```
+[
+{"id":1,"nome":"Ana Souza","nascimento":"1985-03-15","cadastro":"2020-01-15","ativo":true,"limite":1500},
+{"id":2,"nome":"Bruno Lima","nascimento":"1990-11-02","cadastro":"2019-07-04","ativo":false,"limite":0},
+{"id":3,"nome":"Carla Dias","nascimento":null,"cadastro":"2021-12-31","ativo":true,"limite":2500.5},
+{"id":4,"nome":"Diego \"Dd\" Alves","nascimento":"1978-06-30","cadastro":"2018-02-28","ativo":null,"limite":null},
+{"id":5,"nome":"Elisa, Prado","nascimento":"2001-09-09","cadastro":"2022-05-05","ativo":false,"limite":800.25}
+]
+```
+
+E em CSV (campos com vírgula ou aspas ganham aspas, como no RFC 4180):
+
+```
+./rptgo --format csv examples/cadastro-clientes/relatorio.rp examples/cadastro-clientes/dados.txt
+```
+
+```
+id,nome,nascimento,cadastro,ativo,limite
+1,Ana Souza,1985-03-15,2020-01-15,true,1500
+2,Bruno Lima,1990-11-02,2019-07-04,false,0
+3,Carla Dias,,2021-12-31,true,2500.5
+4,"Diego ""Dd"" Alves",1978-06-30,2018-02-28,,
+5,"Elisa, Prado",2001-09-09,2022-05-05,false,800.25
 ```
 
 ## A linguagem do script (`.rp`)
@@ -155,7 +208,7 @@ cmd/rptgo/          interface de linha de comando
   cp850.go          tabela da página de código CP850 (--encoding cp850)
   csv.go            saída --format csv
   json.go           saída --format json
-examples/           relatórios de exemplo (vendas por região, estoque por categoria)
+examples/           relatórios de exemplo (vendas por região, estoque por categoria, cadastro de clientes)
 internal/report/
   lexer.go          análise léxica (tokens, comentários, literais de data/repetição)
   parser.go         análise sintática recursiva descendente -> AST

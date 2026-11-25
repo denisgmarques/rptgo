@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -52,5 +53,31 @@ func TestExemploEstoqueCategoria(t *testing.T) {
 		if !strings.Contains(src, f) {
 			t.Errorf("script não usa %s", f)
 		}
+	}
+}
+
+func TestExemploCadastroClientes(t *testing.T) {
+	script := dirExemplos + "cadastro-clientes/relatorio.rp"
+	dados := dirExemplos + "cadastro-clientes/dados.txt"
+	code, out, errb := executa(t, "", script, dados)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb)
+	}
+	for _, want := range []string{"YES", "NO", "***", "Clientes ativos:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("texto sem %q:\n%s", want, out)
+		}
+	}
+	code, out, errb = executa(t, "", "--format", "json", script, dados)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb)
+	}
+	var objs []map[string]any
+	if err := json.Unmarshal([]byte(out), &objs); err != nil {
+		t.Fatalf("JSON inválido: %v\n%s", err, out)
+	}
+	if len(objs) != 5 || objs[0]["ativo"] != true || objs[1]["ativo"] != false || objs[3]["ativo"] != nil ||
+		objs[2]["nascimento"] != nil || objs[0]["nascimento"] != "1985-03-15" || objs[0]["cadastro"] != "2020-01-15" {
+		t.Errorf("objetos inesperados: %v", objs)
 	}
 }

@@ -41,12 +41,13 @@ func blocosPrimeirosPassos(t *testing.T) []string {
 // exatamente o que o programa gera sobre os arquivos de examples/ (RF-12).
 func TestReadmePrimeirosPassos(t *testing.T) {
 	blocos := blocosPrimeirosPassos(t)
-	if len(blocos) != 4 {
-		t.Fatalf("esperados 4 blocos de código (2 comandos, 2 saídas), vieram %d", len(blocos))
+	if len(blocos) < 2 || len(blocos)%2 != 0 {
+		t.Fatalf("esperado um número par de blocos de código (comando + saída), vieram %d", len(blocos))
 	}
-	casos := []struct {
-		cmd, saida string
-	}{{blocos[0], blocos[1]}, {blocos[2], blocos[3]}}
+	var casos []struct{ cmd, saida string }
+	for i := 0; i < len(blocos); i += 2 {
+		casos = append(casos, struct{ cmd, saida string }{blocos[i], blocos[i+1]})
+	}
 	for _, c := range casos {
 		var args []string
 		for _, ln := range strings.Split(c.cmd, "\n") {
