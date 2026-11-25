@@ -153,3 +153,7 @@ REFERENCIA.md       referência da linguagem, com exemplos conferidos por testes
 SAIDA-HTML.md       saída HTML/PDF: modelo, variáveis, logo e caixas
 scripts/            render-readme-images.sh gera as imagens (docs/images)
 ```
+
+## Licença
+
+[MIT](LICENSE).

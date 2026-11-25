@@ -36,6 +36,7 @@
 - Golden baselines: `internal/report/testdata/golden/`.
 - Doc blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` (README, SAIDA-HTML, example READMEs) and `<!-- script -->`, `<!-- data -->`, `<!-- output -->`, `<!-- error -->` (REFERENCIA) must match real files and output (`cmd/rptgo/readme_test.go`).
 - Header runs on page 1 right after `before report`; `--strict` restores the old rule and forces `/* */` comments onto one line (`Interp.Strict`, `internal/report/interp.go`, set from `cmd/rptgo/main.go`).
+- Bare `today` prints as ldate (4-digit year); `--strict` keeps it a date (2-digit year) (`Interp.ehLdate`, `internal/report/interp.go`).
 - Env config: `RPT_NOW`, `TRIADSEP`, `RADIXSEP`, `CURRSYM`, `DATEFMT`, `TIMEFMT`, `CENTURY_CUTOFF`, `WIDTH`, `PAGELN`, `SEPARATOR`.
 - `RPT_NOW` fixes the clock.
 - Input sources: `--input delimited|csv|json`; `--input-delimiter`; `--input-decimal . , auto`.
@@ -82,6 +83,7 @@ go build -o rptgo ./cmd/rptgo
 | [README.md](README.md) | User docs (pt-BR): usage, examples |
 | [REFERENCIA.md](REFERENCIA.md) | Language reference (pt-BR), verified by tests |
 | [SAIDA-HTML.md](SAIDA-HTML.md) | HTML output page, verified by tests |
+| [LICENSE](LICENSE) | MIT license (linked from README "Licença" section) |
 | [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
 | [examples/](examples) | 9 example dirs, each with script, data and README.md or run.sh |
 | [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README image generator |

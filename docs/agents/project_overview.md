@@ -38,6 +38,10 @@
    - `csv` / `json`: `Interp.LinhasOrdenadas` (only `input` and `sort` apply; no event sections run).
 8. Write to stdout or `-o` file; exit 0. Any script, data, I/O or template error prints `rptgo: <message>` and exits 1.
 
+### License
+
+- MIT (`LICENSE`; linked from the `Licença` section of `README.md`).
+
 ### Out of scope
 
 - No network service, daemon or API; no database (input is one file or stdin per run).

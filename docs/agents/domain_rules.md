@@ -86,6 +86,7 @@ Aggregates `count total avg min max` work only inside `after <key>` and `after r
 - Truthiness: nil, 0, `""`, false are false (`verdade`).
 - `/` on two integers is integer division; `%` is modulo; zero divisor = `divisão por zero`.
 - Dates: date - date = days (`int64`); date +/- N = date.
+- `today` alone prints as `ldate` (4-digit year) unless `--strict`, which keeps it a `date` (2-digit year). `today - 1` and other arithmetic on `today` still print as `date` (`Interp.ehLdate`, `internal/report/interp.go`; `cmd/rptgo/main_test.go`).
 - `+` joins two strings; `/+` joins after trimming trailing blanks of the left side (text only).
 - `substr [start-end]`: 1-based, end inclusive, rune-based; nil stays nil; non-text is an error.
 - Comparisons normalize nil to a neutral value of the other side (`""`, zero date, 0).
