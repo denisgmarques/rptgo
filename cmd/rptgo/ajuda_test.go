@@ -76,3 +76,10 @@ func TestValoresInvalidosDeOpcoes(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckMensagem(t *testing.T) {
+	code, out, errb := executa(t, "", "--check", "../../examples/relatorio-vendas-regiao/relatorio.rp")
+	if code != 0 || out != "Script sem erros de sintaxe.\n" || errb != "" {
+		t.Errorf("code=%d stdout=%q stderr=%q", code, out, errb)
+	}
+}

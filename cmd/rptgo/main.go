@@ -95,7 +95,7 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		return 1
 	}
 	if op.check {
-		fmt.Fprintln(saidaPadrao, "No syntax errors were found in the report script.")
+		fmt.Fprintln(saidaPadrao, "Script sem erros de sintaxe.")
 		return 0
 	}
 

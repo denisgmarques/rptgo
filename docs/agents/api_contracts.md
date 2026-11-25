@@ -50,7 +50,7 @@ rptgo [options] script.rp [data-file | -]
 | `--title` | default = script file name without extension | only `--format html` |
 | `--lines` | integer >= 1, text lines per page | only `--format html` |
 | `--strict` | flag; `/* */` comments must close on the same line | |
-| `--check`, `-r` | flag; parse script only, print `No syntax errors were found in the report script.` | |
+| `--check`, `-r` | flag; parse script only, print `Script sem erros de sintaxe.` | |
 
 Environment read by the interpreter: `DATEFMT` (`DD/MM/YY`), `CENTURY_CUTOFF` (30), `TIMEFMT` (`HH:MM`), `WIDTH` (80), `PAGELN` (66), `SEPARATOR` (`\|`), `RADIXSEP` (`.`), `CURRSYM` (`$`), `RPT_NOW` (`2026-11-24 17:47`, `2006-01-02 15:04:05` or RFC 3339; fixes the clock).
 
