@@ -11,7 +11,7 @@
 ### Business problem
 
 - Fixed-width, paginated reports with control breaks (`before`/`after` sort keys, `total`/`count`/`avg`/`min`/`max`) need a script language, not ad-hoc code.
-- Legacy-style output needs print-oriented features: page length, margins, form feed, CRLF, `latin-1`/`cp850` encodings, box drawing (`cmd/rptgo/main.go`, `cmd/rptgo/box.go`, `cmd/rptgo/cp850.go`).
+- Printer-oriented output needs print features: page length, margins, form feed, CRLF, `latin-1`/`cp850` encodings, box drawing (`cmd/rptgo/main.go`, `cmd/rptgo/box.go`, `cmd/rptgo/cp850.go`).
 - Spreadsheet-style CSV (`;` delimiter, `1.250,50` decimals, BOM) and JSON must feed the same script as the pipe-delimited file (`cmd/rptgo/entrada.go`).
 
 ### Consumers and integrations

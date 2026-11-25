@@ -272,9 +272,9 @@ Os dois produzem exatamente o mesmo relatório que o `dados.txt`.
 
 ### O CSV exportado pelo Excel brasileiro
 
-Usa `;` como delimitador, vírgula decimal (`1.250,50`) e datas `DD/MM/AAAA`. O RPT original só lê o
-ponto como separador decimal na entrada, então `--input-decimal` é uma extensão do `rptgo`, desligada
-por padrão (`auto` a liga só se os valores tiverem a forma `1250,50`). O arquivo antigo "CSV (separado
+Usa `;` como delimitador, vírgula decimal (`1.250,50`) e datas `DD/MM/AAAA`. Por padrão os números são
+lidos com **ponto** decimal; `--input-decimal` liga a leitura com vírgula, e `auto` a liga só se os
+valores tiverem a forma `1250,50`. O arquivo antigo "CSV (separado
 por vírgulas)" grava em Windows-1252: nesse caso junte `--encoding latin-1`.
 [`dados-excel-br.csv`](dados-excel-br.csv):
 

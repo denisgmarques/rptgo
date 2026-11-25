@@ -24,7 +24,8 @@ func incrementarDigitos(s string) string {
 
 // arredondaMeioParaCima arredonda |v| pra `casas` decimais (meio-pra-cima), devolvendo os
 // dígitos inteiros (sem zeros à esquerda) e os `casas` dígitos fracionários, separados do
-// sinal. Opera sobre a representação decimal mais curta do float pra evitar ruído de ponto flutuante binário.
+// sinal. Opera sobre a representação decimal mais curta do float, pra evitar ruído de
+// ponto flutuante binário.
 func arredondaMeioParaCima(v float64, casas int) (digInt string, digFrac string, neg bool) {
 	neg = v < 0
 	s := strconv.FormatFloat(v, 'f', -1, 64) // representação decimal mais curta que ida-e-volta
@@ -60,7 +61,8 @@ var rePrintfNum = regexp.MustCompile(`^%(-?)(\d*)(?:\.(\d+))?l{0,2}([dfi])$`)
 var reStrMask = regexp.MustCompile(`^(\d+)(r?)$`)
 
 // FmtMascara formata um valor numérico (int64/float64) segundo uma máscara `using` do
-// relatório: ou um formato %printf (ex. '%ld', '%7.2f'), ou a notação própria com '#', '&', '*', '+', '-', '$', '(', ')', ',' e '.'.
+// relatório: ou um formato %printf (ex. '%ld', '%7.2f'), ou a notação própria com '#', '&',
+// '*', '+', '-', '$', '(', ')', ',' e '.'.
 func FmtMascara(v Value, mask string) (string, error) {
 	if v == nil {
 		v = int64(0)
@@ -147,8 +149,8 @@ func FmtMascara(v Value, mask string) (string, error) {
 				}
 			case '$':
 				if !moedaImpressa {
-					// CURRSYM pode ter mais de 1 caractere; nesse caso o restante da máscara
-					// cuida das outras posições (só o 1º caractere do símbolo é usado).
+					// CURRSYM pode ter mais de 1 caractere, mas cada caractere da máscara ocupa
+					// uma posição: só o 1º caractere do símbolo é usado.
 					if moeda == "" {
 						res[pos] = ' '
 					} else {

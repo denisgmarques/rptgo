@@ -15,7 +15,7 @@ Excel, um JSON, a saída de outro programa ou de uma consulta ao banco. E precis
 relatório com **layout**: colunas alinhadas, cabeçalho e rodapé por página, **várias quebras
 em cascata** (grupo, subgrupo, item) e **totais, contagens e médias em cada nível**. Escrever
 isso à mão em código é trabalhoso; o `rptgo` faz com um script declarativo de poucas linhas,
-numa linguagem de relatórios no estilo dos geradores dos anos 80 e 90 (seções `input`, `sort`,
+numa linguagem declarativa de relatórios (seções `input`, `sort`,
 `before`, `after`, `detail`).
 
 ```

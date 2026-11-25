@@ -302,10 +302,10 @@ A coluna `date` imprime o ano com 2 dígitos e a `ldate` com 4: é a **única** 
 de horas na seção 7.
 
 **Nomes de colunas e palavras reservadas.** O nome de uma coluna começa com uma letra (ou `_`),
-tem letras, dígitos e `_`, não diferencia maiúsculas de minúsculas e deve ser único. A linguagem
-original **proíbe** palavras-chave e palavras reservadas como nome de coluna. O `rptgo` é mais
-tolerante: as palavras das instruções e os nomes de tipos servem de nome de coluna, e é por isso
-que o exemplo dos feriados usa `date`, `name` e `type` (os nomes das chaves do JSON):
+tem letras, dígitos e `_`, não diferencia maiúsculas de minúsculas e deve ser único. Palavras-chave e palavras
+reservadas não deveriam ser usadas como nome de coluna, mas o `rptgo` é tolerante: as palavras das
+instruções e os nomes de tipos servem de nome de coluna, e é por isso que o exemplo dos feriados usa
+`date`, `name` e `type` (os nomes das chaves do JSON):
 
 <!-- script -->
 ```text
@@ -352,7 +352,7 @@ end
 o dado era 5, mas hour vale 17:47
 ```
 
-Para continuar compatível com a linguagem original, evite como nome de coluna ou de variável:
+Palavras reservadas:
 
 | Grupo | Palavras |
 |---|---|

@@ -41,9 +41,8 @@ var ops2 = map[string]bool{"<>": true, "^=": true, "!=": true, "<=": true, ">=":
 
 // Tokenize converte o texto do script em uma lista de tokens.
 //
-// comentarioUmaLinha=true valida um detalhe em que este programa é permissivo: por padrão aceita comentário de /* */ de várias linhas (mais prático pra
-// documentar nossos próprios scripts); com essa opção, exige que abra e feche na mesma linha,
-// como no modo estrito.
+// comentarioUmaLinha=true exige que o comentário /* */ abra e feche na mesma linha; por padrão,
+// comentários de várias linhas são aceitos (mais prático pra documentar os scripts).
 // indexRunas acha a posição (em runas, não em bytes) da primeira ocorrência de sub dentro
 // de r. Existe só pra nunca precisar misturar índice de byte com índice de runa.
 func indexRunas(r []rune, sub string) int {

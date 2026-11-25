@@ -645,7 +645,7 @@ func (ps *parser) eUn() (Expr, error) {
 	return e, nil
 }
 
-// substrEspec lê "[início-fim]" (inteiros, início >= 1 e fim >= início, como no manual).
+// substrEspec lê "[início-fim]" (inteiros, início >= 1 e fim >= início).
 func (ps *parser) substrEspec(linha int) (SubstrExpr, error) {
 	var sub SubstrExpr
 	if _, err := ps.op("["); err != nil {

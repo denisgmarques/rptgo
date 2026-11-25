@@ -140,7 +140,7 @@ func ehData(v Value) bool {
 }
 
 // comparar implementa os operadores relacionais (= <> < > <= >=), com a mesma normalização
-// de nulos e de tipo (se um lado é string e o outro não, os dois virem string).
+// de nulos e de tipo (se um lado é string e o outro não, os dois viram string).
 func comparar(op string, a, b Value) (bool, error) {
 	if x, ok := a.(bool); ok {
 		a = boolParaInt(x)
@@ -194,7 +194,7 @@ func cmpOrdenado(op string, menor, igual, maior bool) bool {
 }
 
 // aritm implementa + - * / sobre números, datas (data-data=dias, data±N=data) e
-// concatenação de strings com '+' - mesmas regras.
+// concatenação de strings com '+'.
 func aritm(op string, a, b Value) (Value, error) {
 	if op == "/+" { // concatenação indireta: tira os brancos finais do lado esquerdo
 		as, aok := textoOuNulo(a)

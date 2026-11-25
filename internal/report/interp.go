@@ -620,8 +620,8 @@ func (it *Interp) ehLdate(e Expr) bool {
 }
 
 // larguraCol devolve a largura declarada no 'input' pra uma referência direta a coluna
-// STRING (usada pro preenchimento padrão com espaços quando não há 'using' - uma string sem 'using' é alinhada até a largura do campo, não só até o tamanho
-// do valor).
+// STRING (usada pro preenchimento padrão com espaços quando não há 'using': uma string sem
+// 'using' é alinhada até a largura do campo, não só até o tamanho do valor).
 func (it *Interp) larguraCol(e Expr) (int, bool) {
 	col, ok := e.(ColExpr)
 	if !ok {
@@ -722,8 +722,7 @@ func (it *Interp) formata(v, m Value, longa bool) ([]string, error) {
 			if larg, ok := ehMascaraString(ms); ok {
 				return QuebraTexto(s, larg), nil
 			}
-			//
-			// erro: imprime em branco.
+			// uma máscara numérica aplicada a um campo de texto não dá erro: imprime em branco.
 			return []string{""}, nil
 		}
 		return []string{s}, nil
