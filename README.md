@@ -16,16 +16,19 @@ script declarativo de poucas linhas, numa linguagem de relatórios no estilo dos
 anos 80 e 90 (seções `input`, `sort`, `before`, `after`, `detail`).
 
 ```
- fontes de texto         script .rp                         saídas
- ┌──────────────┐     ┌──────────────────┐     ┌─ texto paginado (matricial, formulário contínuo)
- │ dados.txt    │ ──▶ │ input / sort     │ ──▶ ├─ PDF / HTML com logo, template e caixas
- │ campos com | │     │ before / after   │     ├─ CSV
- └──────────────┘     │ detail           │     └─ JSON
-                      └──────────────────┘
+ fontes de texto          script .rp                            saídas
+ ┌──────────────┐      ┌────────────────────┐
+ │ dados.txt    │      │ input   (colunas)  │ ───────────────▶  CSV, JSON
+ │ campos com | │ ───▶ │ sort    (ordem)    │                   só os dados: input + sort
+ └──────────────┘      ├────────────────────┤
+                       │ before / after     │ ───────────────▶  texto paginado (matricial)
+                       │ detail  (layout)   │ ─▶ template ───▶  PDF / HTML com logo e caixas
+                       └────────────────────┘
 ```
 
-- **Uma definição, várias saídas:** o mesmo `.rp` gera o relatório impresso, o PDF e os dados
-  em CSV/JSON (`--format`).
+- **Uma definição, várias saídas** (`--format`): o layout do script (`before`/`after`/`detail`)
+  gera o relatório impresso e o PDF; o CSV e o JSON ignoram o layout e entregam só os dados,
+  na ordem do `sort`.
 - **Quebras em cascata e acumuladores:** `before`/`after` em cada nível do `sort`, com `count`,
   `total`, `avg`, `min` e `max`, inclusive filtrados (`total(salary where active)`).
 - **Layout em colunas:** `print ... in col N using 'máscara'`, datas, moldes numéricos,
