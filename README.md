@@ -263,7 +263,10 @@ end
 - **Expressões:** aritmética (`+ - * / %`; `/` e `%` entre inteiros dão inteiro), comparações (`= <> < > <= >=`), `and`/`or`/`not`,
   `is [not] null` (expressões lógicas valem 1 ou 0; `if`, `and`/`or`/`not` e `where` exigem
   expressão lógica, não aritmética), constantes (números, `'texto'`, datas sem aspas como `31/12/2026`,
-  repetição de caractere como `40[-]`), `today`, `hour`, `pageno`.
+  repetição de caractere como `40[-]`), `today`, `hour`, `pageno`. Texto: `+` (concatena e mantém
+  os brancos do fim), `/+` (concatena tirando os brancos do fim do lado esquerdo) e
+  `texto substr [início-fim]` (posições de 1 em diante, fim inclusivo; o fim além do tamanho é
+  cortado e um início além do tamanho dá texto vazio).
 - **Funções:** `count(* [where expr])`, `total(expr [where expr])`, `avg`, `min`, `max` (só em `after <chave>`/
   `after report`), `dow`, `mdy`, `index`.
 - **Tipos de coluna:** `numeric`, `float`/`amount`, `date` (ano com 2 dígitos na impressão),

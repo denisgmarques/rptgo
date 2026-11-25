@@ -25,6 +25,12 @@ type BinExpr struct {
 	Op   string // + - * /
 	L, R Expr
 }
+
+// SubstrExpr é "texto substr [início-fim]": posições de 1 em diante, fim inclusivo.
+type SubstrExpr struct {
+	X          Expr
+	Start, End int
+}
 type CallExpr struct {
 	Name  string
 	Args  []Expr
@@ -45,6 +51,7 @@ func (IsNullExpr) exprNode() {}
 func (CmpExpr) exprNode()    {}
 func (BinExpr) exprNode()    {}
 func (CallExpr) exprNode()   {}
+func (SubstrExpr) exprNode() {}
 
 // Stmt é uma instrução da seção de formato (print, skip, page, need, set, if, begin/end).
 type Stmt interface{ stmtNode() }

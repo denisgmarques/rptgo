@@ -35,7 +35,7 @@ var reNum = regexp.MustCompile(`^\d+(\.\d*)?|^\.\d+`)
 var reDataLit = regexp.MustCompile(`^\d{1,4}/\d{1,4}/\d{1,4}`)
 var reID = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*`)
 
-var ops2 = map[string]bool{"<>": true, "^=": true, "!=": true, "<=": true, ">=": true}
+var ops2 = map[string]bool{"<>": true, "^=": true, "!=": true, "<=": true, ">=": true, "/+": true}
 
 // Tokenize converte o texto do script em uma lista de tokens.
 //

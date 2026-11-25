@@ -133,6 +133,8 @@ func verificaExpr(s *Script, e Expr, linha int) error {
 		return verificaExpr(s, x.X, linha)
 	case IsNullExpr:
 		return verificaExpr(s, x.X, linha)
+	case SubstrExpr:
+		return verificaExpr(s, x.X, linha)
 	case CallExpr:
 		if x.Where != nil {
 			if err := exigeLogico(s, x.Where, linha, "o 'where' de count(* where ...)"); err != nil {

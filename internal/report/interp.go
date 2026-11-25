@@ -286,6 +286,27 @@ func (it *Interp) ev(e Expr) (Value, error) {
 			return nil, err
 		}
 		return aritm(x.Op, a, b)
+	case SubstrExpr:
+		v, err := it.ev(x.X)
+		if err != nil {
+			return nil, err
+		}
+		if v == nil {
+			return nil, nil
+		}
+		s, ok := v.(string)
+		if !ok {
+			return nil, Erro("substr só pode ser usado com texto")
+		}
+		r := []rune(s)
+		if x.Start > len(r) {
+			return "", nil
+		}
+		fim := x.End
+		if fim > len(r) {
+			fim = len(r)
+		}
+		return string(r[x.Start-1 : fim]), nil
 	case CallExpr:
 		return it.chama(x)
 	}

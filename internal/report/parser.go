@@ -542,7 +542,7 @@ func (ps *parser) eAdd() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for ps.isOp("+", "-") {
+	for ps.isOp("+", "-", "/+") {
 		op := ps.nx().Text
 		b, err := ps.eMul()
 		if err != nil {
@@ -581,7 +581,48 @@ func (ps *parser) eUn() (Expr, error) {
 	if ps.isOp("+") {
 		ps.nx()
 	}
-	return ps.ePrim()
+	e, err := ps.ePrim()
+	if err != nil {
+		return nil, err
+	}
+	// operador de substring (posfixo): texto substr [início-fim]
+	for ps.isKw("substr") {
+		linha := ps.nx().Line
+		sub, err := ps.substrEspec(linha)
+		if err != nil {
+			return nil, err
+		}
+		sub.X = e
+		e = sub
+	}
+	return e, nil
+}
+
+// substrEspec lê "[início-fim]" (inteiros, início >= 1 e fim >= início, como no manual).
+func (ps *parser) substrEspec(linha int) (SubstrExpr, error) {
+	var sub SubstrExpr
+	if _, err := ps.op("["); err != nil {
+		return sub, err
+	}
+	ini := ps.nx()
+	if ini.Kind != TokNum || !ini.IsInt {
+		return sub, ErroLinhaScript(linha, "substr espera [início-fim] com números inteiros")
+	}
+	if _, err := ps.op("-"); err != nil {
+		return sub, err
+	}
+	fim := ps.nx()
+	if fim.Kind != TokNum || !fim.IsInt {
+		return sub, ErroLinhaScript(linha, "substr espera [início-fim] com números inteiros")
+	}
+	if _, err := ps.op("]"); err != nil {
+		return sub, err
+	}
+	sub.Start, sub.End = int(ini.Num), int(fim.Num)
+	if sub.Start < 1 || sub.End < sub.Start {
+		return sub, ErroLinhaScript(linha, "substr [%d-%d] inválido: o início começa em 1 e o fim não pode ser menor que o início", sub.Start, sub.End)
+	}
+	return sub, nil
 }
 
 func (ps *parser) ePrim() (Expr, error) {

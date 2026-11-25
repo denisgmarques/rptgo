@@ -87,6 +87,17 @@ func normalizaBool(t string) Value {
 	return nil
 }
 
+// textoOuNulo devolve o texto de v (nulo vale "") e false se v não for texto.
+func textoOuNulo(v Value) (string, bool) {
+	switch x := v.(type) {
+	case nil:
+		return "", true
+	case string:
+		return x, true
+	}
+	return "", false
+}
+
 func paraFloat(v Value) float64 {
 	switch x := v.(type) {
 	case int64:
@@ -173,6 +184,14 @@ func cmpOrdenado(op string, menor, igual, maior bool) bool {
 // aritm implementa + - * / sobre números, datas (data-data=dias, data±N=data) e
 // concatenação de strings com '+' - mesmas regras.
 func aritm(op string, a, b Value) (Value, error) {
+	if op == "/+" { // concatenação indireta: tira os brancos finais do lado esquerdo
+		as, aok := textoOuNulo(a)
+		bs, bok := textoOuNulo(b)
+		if !aok || !bok {
+			return nil, Erro("o operador /+ só pode ser usado com texto")
+		}
+		return strings.TrimRight(as, " ") + bs, nil
+	}
 	if x, ok := a.(bool); ok {
 		a = boolParaInt(x)
 	}
