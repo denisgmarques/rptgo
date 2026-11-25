@@ -32,6 +32,7 @@ type Interp struct {
 	linhasPagina int  // linhas de texto por página; 0 = length - margens do script
 
 	vars    map[string]Value
+	profNome int // profundidade de avaliação de expressões nomeadas (detecta recursão)
 	colIdx  map[string]int
 	row     Row
 	pageno  int
@@ -187,6 +188,15 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		}
 		if j, ok := it.colIdx[x.Name]; ok && j < len(it.row) {
 			return it.row[j], nil
+		}
+		if e, ok := it.S.Nomeadas[x.Name]; ok {
+			// expressão com apelido: usada como se fosse mais uma coluna
+			if it.profNome >= 32 {
+				return nil, Erro("a expressão nomeada '%s' refere-se a si mesma", x.Name)
+			}
+			it.profNome++
+			defer func() { it.profNome-- }()
+			return it.ev(e)
 		}
 		return nil, Erro("nome desconhecido: '%s'", x.Name)
 	case TodayExpr:

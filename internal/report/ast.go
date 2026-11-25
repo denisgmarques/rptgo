@@ -124,5 +124,6 @@ type Script struct {
 	Sort       []SortKey
 	Events     map[EventKey][]Stmt
 	Variaveis  map[string]bool // nomes usados em 'set' (precisam de set antes do primeiro uso)
+	Nomeadas   map[string]Expr // expressões com apelido: "<nome> expr" no sort ou num print
 	ordemEvent []EventKey      // ordem de inserção, só pra mensagens/depuração estáveis
 }

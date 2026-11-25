@@ -262,6 +262,12 @@ end
   uma chave calculada precisa de nome explícito, entre `<>`, antes da expressão:
   `sort <periodo> (mdy(data,2) * 100 + mdy(data,0)), loja` e depois `before periodo`. Depois da
   chave pode vir `desc`.
+- **Expressões nomeadas:** `<nome> expressão` dá um apelido a uma expressão, no `sort` ou num
+  `print` (`print item, <total> preco * qtd in col 30`). Depois de nomeado, o nome vale nas
+  expressões seguintes como se fosse mais uma coluna (`print total * 2`, `if total > 100 then`,
+  `total(total)`), e o apelido tem o tipo da expressão (um apelido aritmético não serve de
+  condição). Repetir o mesmo nome com a mesma expressão é aceito; com outra expressão, ou com o
+  nome de uma coluna ou variável, é erro.
 - **Comandos:** `print` (com `in col N`, `using 'máscara'`, `centered`, `no newline`),
   `skip [n]`, `page [, no footer][, no header]`, `need n`, `set var to expr`,
   `if expr then ... else ...`, `begin ... end`.

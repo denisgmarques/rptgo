@@ -2,6 +2,7 @@ package report
 
 import (
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -9,8 +10,38 @@ import (
 var eventos = map[string]bool{"before": true, "after": true, "header": true, "footer": true, "detail": true}
 
 type parser struct {
-	t []Token
-	p int
+	t        []Token
+	p        int
+	nomeadas map[string]Expr // apelidos "<nome> expr" encontrados no sort e nos print
+}
+
+// registraNome guarda o apelido de uma expressão. Repetir o mesmo nome com a mesma expressão
+// é aceito; com outra expressão é erro. "<g> g" (o apelido é a própria coluna) não faz nada.
+func (ps *parser) registraNome(nome string, e Expr, linha int) error {
+	if c, ok := e.(ColExpr); ok && c.Name == nome {
+		return nil
+	}
+	if antiga, ok := ps.nomeadas[nome]; ok && !reflect.DeepEqual(antiga, e) {
+		return ErroLinhaScript(linha, "o nome '%s' já foi dado a outra expressão", nome)
+	}
+	ps.nomeadas[nome] = e
+	return nil
+}
+
+// apelido lê "<nome>" se houver e devolve o nome ("" se não houver).
+func (ps *parser) apelido() (string, error) {
+	if !ps.isOp("<") {
+		return "", nil
+	}
+	ps.nx()
+	t := ps.nx()
+	if t.Kind != TokID {
+		return "", ErroLinhaScript(t.Line, "nome esperado entre < e >")
+	}
+	if _, err := ps.op(">"); err != nil {
+		return "", err
+	}
+	return t.Text, nil
 }
 
 func (ps *parser) pk(k int) Token {
@@ -96,7 +127,7 @@ func (ps *parser) numInt() (int, error) {
 
 // Parse interpreta a lista de tokens e devolve o Script completo.
 func Parse(toks []Token) (*Script, error) {
-	ps := &parser{t: toks}
+	ps := &parser{t: toks, nomeadas: map[string]Expr{}}
 	s := &Script{
 		Width:     80,
 		Length:    66,
@@ -175,6 +206,10 @@ func Parse(toks []Token) (*Script, error) {
 		return nil, Erro("o script precisa de uma instrução 'input'")
 	}
 	coletarVariaveis(s)
+	s.Nomeadas = ps.nomeadas
+	if err := verificaNomes(s); err != nil {
+		return nil, err
+	}
 	if err := verificaTipos(s); err != nil {
 		return nil, err
 	}
@@ -214,17 +249,19 @@ func (ps *parser) pInput(s *Script) error {
 
 func (ps *parser) pSort(s *Script) error {
 	for {
-		nome := ""
-		if ps.isOp("<") {
-			ps.nx()
-			nome = ps.nx().Text
-			if _, err := ps.op(">"); err != nil {
-				return err
-			}
+		linha := ps.pk(0).Line
+		nome, err := ps.apelido()
+		if err != nil {
+			return err
 		}
 		e, err := ps.expr()
 		if err != nil {
 			return err
+		}
+		if nome != "" {
+			if err := ps.registraNome(nome, e, linha); err != nil {
+				return err
+			}
 		}
 		if nome == "" {
 			if col, ok := e.(ColExpr); ok {
@@ -410,9 +447,19 @@ func (ps *parser) stmt() (Stmt, error) {
 func (ps *parser) pPrint() (Stmt, error) {
 	var itens []PrintItem
 	for {
+		linha := ps.pk(0).Line
+		nome, err := ps.apelido()
+		if err != nil {
+			return nil, err
+		}
 		e, err := ps.expr()
 		if err != nil {
 			return nil, err
+		}
+		if nome != "" {
+			if err := ps.registraNome(nome, e, linha); err != nil {
+				return nil, err
+			}
 		}
 		item := PrintItem{Expr: e}
 		for {

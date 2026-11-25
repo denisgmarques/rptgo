@@ -23,7 +23,11 @@ func tipoColuna(s *Script, nome string) string {
 	return ""
 }
 
-func tipoDe(s *Script, e Expr) tipoExpr {
+func tipoDe(s *Script, e Expr) tipoExpr { return tipoDeV(s, e, nil) }
+
+// tipoDeV é tipoDe com o conjunto de apelidos já visitados (evita laço em apelidos que se
+// referem uns aos outros).
+func tipoDeV(s *Script, e Expr, visitados map[string]bool) tipoExpr {
 	switch x := e.(type) {
 	case AndExpr, OrExpr, NotExpr, CmpExpr, IsNullExpr:
 		return tLogico
@@ -33,6 +37,13 @@ func tipoDe(s *Script, e Expr) tipoExpr {
 		}
 		switch tipoColuna(s, x.Name) {
 		case "":
+			if ap, ok := s.Nomeadas[x.Name]; ok && !visitados[x.Name] {
+				v := map[string]bool{x.Name: true}
+				for k := range visitados {
+					v[k] = true
+				}
+				return tipoDeV(s, ap, v) // o apelido tem o tipo da expressão que ele nomeia
+			}
 			return tDesconh // o erro de nome desconhecido sai em tempo de execução
 		case "bool":
 			return tLogico
@@ -167,6 +178,25 @@ func verificaBin(s *Script, l, r Expr, linha int, op string) error {
 		}
 		if err := verificaExpr(s, e, linha); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// verificaNomes confere os apelidos de expressões: não podem repetir o nome de uma coluna do
+// input (exceto o apelido trivial "<g> g", que nem chega aqui) nem de uma variável de 'set'.
+func verificaNomes(s *Script) error {
+	nomes := make([]string, 0, len(s.Nomeadas))
+	for n := range s.Nomeadas {
+		nomes = append(nomes, n)
+	}
+	sort.Strings(nomes)
+	for _, n := range nomes {
+		if tipoColuna(s, n) != "" {
+			return Erro("o nome '%s' dado a uma expressão já é uma coluna do input", n)
+		}
+		if s.Variaveis[n] {
+			return Erro("o nome '%s' dado a uma expressão já é uma variável de 'set'", n)
 		}
 	}
 	return nil
