@@ -44,6 +44,8 @@ func textoAjuda(nome string) string {
 	b.WriteString("      --form-feed                separa páginas com \\f em vez de completar com linhas\n")
 	b.WriteString("                                 em branco até o 'length' do script\n")
 	b.WriteString("      --newline MODO             fim de linha: auto (padrão), lf ou crlf\n")
+	b.WriteString("      --box                      troca caixas ASCII (+---+ e |) por caracteres de desenho\n")
+	b.WriteString("                                 de linha; só com --format text e --encoding utf-8 ou cp850\n")
 	b.WriteString("      --strict                   exige que comentários /* */ abram e fechem na\n")
 	b.WriteString("                                 mesma linha\n")
 	b.WriteString("  -r, --check                    só verifica a sintaxe do script, sem gerar relatório\n")

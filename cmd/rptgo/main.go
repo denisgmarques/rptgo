@@ -31,6 +31,7 @@ type opcoes struct {
 	strict   bool
 	check    bool
 	formato  string // text | csv | json
+	box      bool
 }
 
 func main() {
@@ -132,6 +133,9 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		}
 	}
 
+	if op.box {
+		texto = converteCaixas(texto)
+	}
 	crlf := op.newline == "crlf" || (op.newline == "auto" && runtime.GOOS == "windows")
 	if crlf {
 		texto = strings.ReplaceAll(texto, "\n", "\r\n")
@@ -271,6 +275,8 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 				return op, nil, fmt.Errorf("valor inválido para --format: %s (use text, csv ou json)", v)
 			}
 			op.formato = v
+		case "--box":
+			op.box = true
 		case "--strict":
 			op.strict = true
 		case "--check", "-r":
@@ -281,6 +287,12 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			}
 			pos = append(pos, a)
 		}
+	}
+	if op.box && op.formato != "text" {
+		return op, nil, fmt.Errorf("--box só vale com --format text")
+	}
+	if op.box && contem([]string{"latin-1", "latin1", "iso-8859-1", "iso8859-1"}, strings.ToLower(op.encoding)) {
+		return op, nil, fmt.Errorf("--box não funciona com --encoding %s (sem caracteres de desenho de caixa); use utf-8 ou cp850", op.encoding)
 	}
 	if op.formato != "text" && op.formFeed {
 		return op, nil, fmt.Errorf("--format %s não pode ser combinado com --form-feed", op.formato)

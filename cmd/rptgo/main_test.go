@@ -296,3 +296,10 @@ func TestEncodingCP850(t *testing.T) {
 		t.Error("sem --encoding cp850 os acentos não deveriam sair corretos")
 	}
 }
+
+func writeFile(t *testing.T, caminho, conteudo string) {
+	t.Helper()
+	if err := os.WriteFile(caminho, []byte(conteudo), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
