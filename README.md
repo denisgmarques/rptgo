@@ -17,6 +17,9 @@ testes de comportamento (entrada/saída), sem copiar código de nenhum produto e
 rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 ```
 
+- `-h, --help` — mostra a ajuda (uso, opções, variáveis de ambiente, códigos de saída e
+  exemplos) e sai. Sem o script, o programa mostra a mesma ajuda no erro padrão (código 2).
+  O nome do comando na ajuda e nas mensagens é o nome pelo qual o binário foi chamado.
 - `-o, --saida <arquivo>` — grava no arquivo em vez da saída padrão.
 - `--check` — só verifica a sintaxe do script, não gera relatório.
 - `--header auto|sim|nao` — se a 1ª linha dos dados é um cabeçalho com nomes de coluna
@@ -36,6 +39,8 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
   executadas e `width`/`length`/margens são ignorados. Datas (`date` e `ldate`) saem como
   `AAAA-MM-DD`, nulos como vazio (CSV) ou `null` (JSON), e `bool` como `true`/`false`.
   `--format csv|json` não pode ser combinado com `--form-feed` (erro, código de saída 2).
+  Valores inválidos em `--format`, `--header`, `--newline` e `--encoding` também dão erro
+  com código 2.
 
 ## Primeiros passos
 

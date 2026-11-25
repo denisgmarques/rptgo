@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -33,17 +34,27 @@ type opcoes struct {
 }
 
 func main() {
+	if len(os.Args) > 0 && os.Args[0] != "" {
+		nomePrograma = filepath.Base(os.Args[0])
+	}
 	os.Exit(executar(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
 func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io.Writer) int {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			fmt.Fprint(saidaPadrao, textoAjuda(nomePrograma))
+			return 0
+		}
+	}
 	op, posicionais, err := analisaArgs(args)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		erroUso(erroPadrao, err)
 		return 2
 	}
 	if len(posicionais) < 1 {
-		fmt.Fprintln(erroPadrao, "uso: rptgo [opções] script.rp [entrada.txt | -]")
+		fmt.Fprintf(erroPadrao, "%s: falta o arquivo de script\n\n", nomePrograma)
+		fmt.Fprint(erroPadrao, textoAjuda(nomePrograma))
 		return 2
 	}
 	op.script = posicionais[0]
@@ -54,19 +65,19 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 
 	textoScriptBytes, err := os.ReadFile(op.script)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	textoScript := decodificar(textoScriptBytes, op.encoding)
 	report.DefFonteScript(textoScript)
 	toks, err := report.Tokenize(textoScript, op.strict)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	script, err := report.Parse(toks)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	if op.check {
@@ -78,7 +89,7 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	if op.entrada != "-" {
 		f, err := os.Open(op.entrada)
 		if err != nil {
-			fmt.Fprintln(erroPadrao, "rptgo:", err)
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 			return 1
 		}
 		defer f.Close()
@@ -86,7 +97,7 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	}
 	dadosBytes, err := io.ReadAll(leitorDados)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	dados := decodificar(dadosBytes, op.encoding)
@@ -96,7 +107,7 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 
 	it, err := report.NovoInterp(script, registros, op.formFeed)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	var texto string
@@ -109,14 +120,14 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 			escreve = escreveJSON
 		}
 		if err := escreve(&buf, script, it.LinhasOrdenadas()); err != nil {
-			fmt.Fprintln(erroPadrao, "rptgo:", err)
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 			return 1
 		}
 		texto = buf.String()
 	default:
 		texto, err = it.Run()
 		if err != nil {
-			fmt.Fprintln(erroPadrao, "rptgo:", err)
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 			return 1
 		}
 	}
@@ -185,17 +196,17 @@ func codificar(s string, enc string) []byte {
 func escreveArquivo(caminho string, texto []byte, erroPadrao io.Writer) int {
 	f, err := os.Create(caminho)
 	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	defer f.Close()
 	w := bufio.NewWriter(f)
 	if _, err := w.Write(texto); err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	if err := w.Flush(); err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 		return 1
 	}
 	return 0
@@ -227,11 +238,17 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			if err != nil {
 				return op, nil, err
 			}
+			if !contem(valoresEncoding, strings.ToLower(v)) {
+				return op, nil, fmt.Errorf("valor inválido para --encoding: %s (use utf-8, latin-1 ou cp850)", v)
+			}
 			op.encoding = v
 		case "--header":
 			v, err := next()
 			if err != nil {
 				return op, nil, err
+			}
+			if !contem(valoresHeader, v) {
+				return op, nil, fmt.Errorf("valor inválido para --header: %s (use auto, sim ou nao)", v)
 			}
 			op.header = v
 		case "--form-feed":
@@ -241,13 +258,16 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			if err != nil {
 				return op, nil, err
 			}
+			if !contem(valoresNewline, v) {
+				return op, nil, fmt.Errorf("valor inválido para --newline: %s (use auto, lf ou crlf)", v)
+			}
 			op.newline = v
 		case "--format":
 			v, err := next()
 			if err != nil {
 				return op, nil, err
 			}
-			if v != "text" && v != "csv" && v != "json" {
+			if !contem(valoresFormato, v) {
 				return op, nil, fmt.Errorf("valor inválido para --format: %s (use text, csv ou json)", v)
 			}
 			op.formato = v
