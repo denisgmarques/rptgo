@@ -1,0 +1,40 @@
+/* Feriados nacionais do ano, por mes, a partir de UMA chamada a uma API:
+     curl -s https://brasilapi.com.br/api/feriados/v1/2026 | rpt --input json relatorio.rp -
+   O JSON da resposta e o dado: o input so escolhe as chaves que usa (date, name, type e
+   weekday). A chave do mes e calculada (<mes>) e da nome as secoes before/after. */
+input
+   date     [ldate 10],
+   name     [string 40],
+   type     [string 12],
+   weekday  [string 14]
+
+width 78
+length 60
+sort <mes> mdy(date,0), date
+
+before report
+   print 'FERIADOS NACIONAIS' in col 1, mdy(date,2) in col 20 using '&&&&'
+   print 'Quando cai no fim de semana, o feriado nao gera folga.' in col 1
+   skip
+
+before mes
+   print index(mdy(date,0) - 1, 'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro') in col 1
+   print 70[-] in col 1
+
+detail
+   print date in col 3, weekday in col 15, name in col 31
+   if dow(date) = 0 or dow(date) = 6 then
+      print '(cai no fim de semana)' in col 31
+   else if dow(date) = 1 or dow(date) = 5 then
+      print '(fim de semana prolongado)' in col 31
+   else if dow(date) = 2 or dow(date) = 4 then
+      print '(emenda possivel)' in col 31
+
+after mes
+   print 'Feriados no mes:' in col 3, count(*) in col 31 using '#&'
+   skip
+
+after report
+   print 'Total no ano:' in col 3, count(*) in col 31 using '#&'
+   print 'No fim de semana:' in col 3, count(* where dow(date) = 0 or dow(date) = 6) in col 31 using '#&'
+end
