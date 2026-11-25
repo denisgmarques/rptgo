@@ -1,0 +1,9 @@
+[
+  {"regiao": "Sul", "vendedor": "Ana Souza", "valor": 1250.50},
+  {"regiao": "Norte", "vendedor": "Bruno Lima", "valor": 980.00},
+  {"regiao": "Sul", "vendedor": "Carla Dias", "valor": 2100.75},
+  {"regiao": "Leste", "vendedor": "Diego Alves", "valor": 450.25},
+  {"regiao": "Norte", "vendedor": "Elisa Prado", "valor": 1320.40},
+  {"regiao": "Leste", "vendedor": "Fabio Neri", "valor": 780.00},
+  {"regiao": "Sul", "vendedor": "Gina Rocha", "valor": 310.10}
+]

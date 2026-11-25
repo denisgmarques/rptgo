@@ -303,3 +303,62 @@ func writeFile(t *testing.T, caminho, conteudo string) {
 		t.Fatal(err)
 	}
 }
+
+func TestExecutarCSVOpcoes(t *testing.T) {
+	script := filepath.Join(dirGolden, "vendas.rp")
+	dados := filepath.Join(dirGolden, "vendas.dat")
+	code, out, errb := executa(t, "", "--format", "csv", "--csv-delimiter", ";", "--csv-quote", "strings", "--csv-decimal", ",", script, dados)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb)
+	}
+	want := "\"regiao\";\"vendedor\";\"valor\"\n\"Leste\";\"Diego Alves\";450,25\n\"Leste\";\"Fabio Neri\";780\n" +
+		"\"Norte\";\"Bruno Lima\";980\n\"Norte\";\"Elisa Prado\";1320,4\n" +
+		"\"Sul\";\"Ana Souza\";1250,5\n\"Sul\";\"Carla Dias\";2100,75\n\"Sul\";\"Gina Rocha\";310,1\n"
+	if out != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out, want)
+	}
+	code, out, _ = executa(t, "", "--format", "csv", "--csv-delimiter", "tab", "--csv-no-header", script, dados)
+	if code != 0 || strings.HasPrefix(out, "regiao") || !strings.HasPrefix(out, "Leste\tDiego Alves\t450.25\n") {
+		t.Errorf("tab sem cabeçalho: code=%d %q", code, out)
+	}
+	// o padrão não mudou
+	_, padrao, _ := executa(t, "", "--format", "csv", script, dados)
+	if !strings.HasPrefix(padrao, "regiao,vendedor,valor\nLeste,Diego Alves,450.25\n") {
+		t.Errorf("padrão alterado: %q", padrao)
+	}
+}
+
+func TestCSVOpcoesValidacoes(t *testing.T) {
+	rp := filepath.Join(dirGolden, "vendas.rp")
+	dat := filepath.Join(dirGolden, "vendas.dat")
+	casos := [][]string{
+		{"--format", "csv", "--csv-delimiter", "ab", rp, dat},
+		{"--format", "csv", "--csv-delimiter", `"`, rp, dat},
+		{"--format", "csv", "--csv-delimiter", "", rp, dat},
+		{"--format", "csv", "--csv-quote", "sempre", rp, dat},
+		{"--format", "csv", "--csv-decimal", ";", rp, dat},
+		{"--format", "csv", "--csv-decimal", ",", rp, dat},   // delimitador padrão é a vírgula
+		{"--format", "csv", "--csv-delimiter", ".", rp, dat}, // igual ao decimal padrão
+		{"--csv-delimiter", ";", rp, dat},                    // só vale com --format csv
+		{"--format", "json", "--csv-quote", "all", rp, dat},
+		{"--format", "html", "--csv-no-header", rp, dat},
+		{"--format", "csv", "--csv-delimiter"},
+	}
+	for _, args := range casos {
+		code, out, errb := executa(t, "", args...)
+		if code != 2 || out != "" || !strings.HasPrefix(errb, "rptgo: ") {
+			t.Errorf("%v: code=%d stdout=%q stderr=%q", args, code, out, errb)
+		}
+	}
+	// aliases de delimitador e decimal com vírgula quando o delimitador não é vírgula
+	for _, args := range [][]string{
+		{"--format", "csv", "--csv-delimiter", "semicolon", "--csv-decimal", ",", rp, dat},
+		{"--format", "csv", "--csv-delimiter", "pipe", rp, dat},
+		{"--format", "csv", "--csv-delimiter", "comma", rp, dat},
+		{"--format", "csv", "--csv-delimiter", "|", "--csv-quote", "all", rp, dat},
+	} {
+		if code, _, errb := executa(t, "", args...); code != 0 {
+			t.Errorf("%v: code=%d %q", args, code, errb)
+		}
+	}
+}

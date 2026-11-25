@@ -22,22 +22,29 @@ import (
 )
 
 type opcoes struct {
-	script   string
-	entrada  string
-	saida    string
-	encoding string
-	header   string // auto | sim | nao
-	formFeed bool
-	newline  string // auto | lf | crlf
-	strict   bool
-	check    bool
-	formato  string // text | csv | json
-	box      bool
-	template string   // --template (html)
-	vars     []string // --var NOME=VALOR (html)
-	logo     string   // --logo (html)
-	titulo   string   // --title (html)
-	linhas   int      // --lines (html)
+	script     string
+	entrada    string
+	saida      string
+	encoding   string
+	header     string // auto | sim | nao
+	formFeed   bool
+	newline    string // auto | lf | crlf
+	strict     bool
+	check      bool
+	formato    string // text | csv | json
+	box        bool
+	input      string   // --input delimited|csv|json
+	inputDelim string   // --input-delimiter
+	inputDec   string   // --input-decimal
+	csvDelim   string   // --csv-delimiter
+	csvQuote   string   // --csv-quote
+	csvDec     string   // --csv-decimal
+	csvSemCab  bool     // --csv-no-header
+	template   string   // --template (html)
+	vars       []string // --var NOME=VALOR (html)
+	logo       string   // --logo (html)
+	titulo     string   // --title (html)
+	linhas     int      // --lines (html)
 }
 
 func main() {
@@ -110,7 +117,28 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	dados := decodificar(dadosBytes, op.encoding)
 	report.DefFonteDados(dados)
 
-	registros := leRegistros(dados, script.Separator, script.Input[0].Name, op.header, len(script.Input))
+	var registros [][]string
+	switch op.input {
+	case entradaCSV:
+		delim, _ := delimitadorCSV(valorOu(op.inputDelim, ","))
+		registros, err = leRegistrosCSV(dados, delim, strings.ToLower(script.Input[0].Name), op.header)
+	case entradaJSON:
+		nomes := make([]string, len(script.Input))
+		for i, c := range script.Input {
+			nomes[i] = c.Name
+		}
+		registros, err = leRegistrosJSON(dados, nomes)
+		report.DefFonteDados(textoFonteJSON(dados))
+	default:
+		registros = leRegistros(dados, script.Separator, script.Input[0].Name, op.header, len(script.Input))
+	}
+	if err != nil {
+		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
+		return 1
+	}
+	if op.inputDec == "," {
+		ajustaDecimalEntrada(registros, script.Input)
+	}
 
 	it, err := report.NovoInterp(script, registros, op.formFeed)
 	if err != nil {
@@ -122,7 +150,9 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	case "csv", "json":
 		// CSV/JSON não executam nenhuma seção de evento: só 'input' e 'sort' contam.
 		var buf bytes.Buffer
-		escreve := escreveCSV
+		escreve := func(w io.Writer, s *report.Script, rows []report.Row) error {
+			return escreveCSV(w, s, rows, op.csvOpcoes())
+		}
 		if op.formato == "json" {
 			escreve = escreveJSON
 		}
@@ -302,6 +332,62 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			op.formato = v
 		case "--box":
 			op.box = true
+		case "--input":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if !contem(valoresInput, v) {
+				return op, nil, fmt.Errorf("valor inválido para --input: %s (use delimited, csv ou json)", v)
+			}
+			op.input = v
+		case "--input-delimiter":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if _, err := delimitadorCSV(v); err != nil {
+				return op, nil, fmt.Errorf("--input-delimiter: %v", err)
+			}
+			op.inputDelim = v
+		case "--input-decimal":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if v != "." && v != "," {
+				return op, nil, fmt.Errorf("valor inválido para --input-decimal: %s (use . ou ,)", v)
+			}
+			op.inputDec = v
+		case "--csv-delimiter":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if _, err := delimitadorCSV(v); err != nil {
+				return op, nil, err
+			}
+			op.csvDelim = v
+		case "--csv-quote":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if !contem(valoresCSVQuote, v) {
+				return op, nil, fmt.Errorf("valor inválido para --csv-quote: %s (use minimal, strings ou all)", v)
+			}
+			op.csvQuote = v
+		case "--csv-decimal":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if v != "." && v != "," {
+				return op, nil, fmt.Errorf("valor inválido para --csv-decimal: %s (use . ou ,)", v)
+			}
+			op.csvDec = v
+		case "--csv-no-header":
+			op.csvSemCab = true
 		case "--template":
 			v, err := next()
 			if err != nil {
@@ -353,6 +439,25 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 	if op.box && op.formato != "text" && op.formato != "html" {
 		return op, nil, fmt.Errorf("--box só vale com --format text ou html")
 	}
+	if op.inputDec != "" && op.input == entradaJSON {
+		return op, nil, fmt.Errorf("--input-decimal não vale com --input json (os números do JSON já são números)")
+	}
+	if op.inputDec == "," && op.input == entradaCSV && valorOu(op.inputDelim, ",") == "," {
+		return op, nil, fmt.Errorf("--input-decimal \",\" e o delimitador do CSV de entrada não podem ser a vírgula; use --input-delimiter ';'")
+	}
+	if op.inputDelim != "" && op.input != entradaCSV {
+		return op, nil, fmt.Errorf("--input-delimiter só vale com --input csv")
+	}
+	if op.formato != "csv" {
+		for opt, usada := range map[string]bool{"--csv-delimiter": op.csvDelim != "", "--csv-quote": op.csvQuote != "",
+			"--csv-decimal": op.csvDec != "", "--csv-no-header": op.csvSemCab} {
+			if usada {
+				return op, nil, fmt.Errorf("%s só vale com --format csv", opt)
+			}
+		}
+	} else if _, err := op.csvOpcoesValidas(); err != nil {
+		return op, nil, err
+	}
 	if op.formato != "html" {
 		for opt, usada := range map[string]bool{"--template": op.template != "", "--var": len(op.vars) > 0,
 			"--logo": op.logo != "", "--title": op.titulo != "", "--lines": op.linhas > 0} {
@@ -394,4 +499,12 @@ func leRegistros(texto, sep, primeiraColuna, cabecalho string, ncols int) [][]st
 		regs = append(regs, campos)
 	}
 	return regs
+}
+
+// valorOu devolve v, ou padrao quando v é vazio.
+func valorOu(v, padrao string) string {
+	if v == "" {
+		return padrao
+	}
+	return v
 }

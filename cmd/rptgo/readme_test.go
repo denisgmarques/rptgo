@@ -61,18 +61,24 @@ func blocosMarcados(t *testing.T) []blocoReadme {
 }
 
 // argsDoComando transforma "./rptgo --opt "a b" x \ continuação > saida" nos argumentos do
-// programa: junta linhas continuadas com '\', respeita aspas duplas e descarta o redirecionamento.
+// programa: junta linhas continuadas com '\', respeita aspas simples e duplas e descarta o redirecionamento.
 func argsDoComando(t *testing.T, cmd string) []string {
 	t.Helper()
 	cmd = strings.ReplaceAll(cmd, "\\\n", " ")
 	var args []string
 	var atual strings.Builder
-	temAtual, aspas := false, false
+	temAtual := false
+	var aspas rune // aspa que está aberta (' ou "), 0 se nenhuma
 	for _, r := range cmd {
 		switch {
-		case r == '"':
-			aspas, temAtual = !aspas, true
-		case (r == ' ' || r == '\n' || r == '\t') && !aspas:
+		case (r == '"' || r == '\'') && (aspas == 0 || aspas == r):
+			if aspas == 0 {
+				aspas = r
+			} else {
+				aspas = 0
+			}
+			temAtual = true
+		case (r == ' ' || r == '\n' || r == '\t') && aspas == 0:
 			if temAtual {
 				args = append(args, atual.String())
 				atual.Reset()

@@ -8,27 +8,32 @@ para impressora, **PDF com logo e layout**, CSV ou JSON, a partir da mesma defin
 
 ## Para que serve
 
-Você tem dados em texto, como a exportação de um banco ou de um sistema de gestão, uma saída de outro programa ou
-um CSV convertido, e precisa de um relatório com **layout**: colunas alinhadas, cabeçalho e
-rodapé por página, **várias quebras em cascata** (grupo, subgrupo, item) e **totais, contagens
-e médias em cada nível**. Escrever isso à mão em código é trabalhoso; o `rptgo` faz com um
-script declarativo de poucas linhas, numa linguagem de relatórios no estilo dos geradores dos
-anos 80 e 90 (seções `input`, `sort`, `before`, `after`, `detail`).
+Você tem dados em arquivos de texto: um arquivo separado por delimitador, o CSV exportado do
+Excel, um JSON, a saída de outro programa ou de uma consulta ao banco. E precisa de um
+relatório com **layout**: colunas alinhadas, cabeçalho e rodapé por página, **várias quebras
+em cascata** (grupo, subgrupo, item) e **totais, contagens e médias em cada nível**. Escrever
+isso à mão em código é trabalhoso; o `rptgo` faz com um script declarativo de poucas linhas,
+numa linguagem de relatórios no estilo dos geradores dos anos 80 e 90 (seções `input`, `sort`,
+`before`, `after`, `detail`).
 
 ```
- fontes de texto          script .rp                            saídas
- ┌──────────────┐      ┌────────────────────┐
- │ dados.txt    │      │ input   (colunas)  │ ───────────────▶  CSV, JSON
- │ campos com | │ ───▶ │ sort    (ordem)    │                   só os dados: input + sort
- └──────────────┘      ├────────────────────┤
-                       │ before / after     │ ───────────────▶  texto paginado (matricial)
-                       │ detail  (layout)   │ ─▶ template ───▶  PDF / HTML com logo e caixas
-                       └────────────────────┘
+ fontes de dados            script .rp                          saídas
+ ┌────────────────────┐   ┌────────────────────┐
+ │ texto com |        │   │ input   (colunas)  │
+ │ CSV (do Excel)     │──▶│ sort    (ordem)    │
+ │ JSON               │   ├────────────────────┤ ──────────▶  texto paginado (matricial)
+ └────────────────────┘   │ before / after     │ ─▶ template ▶  PDF / HTML com logo e caixas
+                          │ detail  (layout)   │
+                          └────────────────────┘
 ```
 
-- **Uma definição, várias saídas** (`--format`): o layout do script (`before`/`after`/`detail`)
-  gera o relatório impresso e o PDF; o CSV e o JSON ignoram o layout e entregam só os dados,
-  na ordem do `sort`.
+- **Várias fontes, um mesmo script:** texto com `|` (ou o `separator` do script), CSV com
+  aspas e qualquer delimitador, inclusive o do Excel brasileiro (`;` e decimal com vírgula), e
+  JSON (`--input`). O `input` do script diz o tipo de cada coluna, então datas, números e
+  `bool` seguem as mesmas regras em qualquer fonte.
+- **Layout para impressão:** o layout do script (`before`/`after`/`detail`) gera o relatório
+  paginado e o PDF (`--format text|html`). Também dá para exportar os dados, sem layout, em CSV
+  ou JSON (`--format csv|json`), na ordem do `sort`.
 - **Quebras em cascata e acumuladores:** `before`/`after` em cada nível do `sort`, com `count`,
   `total`, `avg`, `min` e `max`, inclusive filtrados (`total(salary where active)`).
 - **Layout em colunas:** `print ... in col N using 'máscara'`, datas, moldes numéricos,
@@ -54,8 +59,8 @@ Sem o arquivo de dados (ou com `-`), lê da entrada padrão. Todas as opções e
 ```text
 Uso: rptgo [OPÇÃO]... SCRIPT.rp [ENTRADA.txt | -]
 
-Executa um script de relatório (.rp) sobre um arquivo de dados com campos separados
-por '|' (um registro por linha) e escreve o relatório paginado, ou CSV/JSON.
+Executa um script de relatório (.rp) sobre um arquivo de dados (texto com campos separados
+por '|', CSV ou JSON) e escreve o relatório paginado, PDF/HTML, CSV ou JSON.
 Sem ENTRADA.txt, ou com '-', lê os dados da entrada padrão.
 
 Opções:
@@ -72,6 +77,22 @@ Opções:
                                  de linha; com --format text (utf-8 ou cp850) ou html
       --strict                   exige que comentários /* */ abram e fechem na
                                  mesma linha
+
+Fonte dos dados (padrão: texto com campos separados por '|', ou pelo 'separator' do script):
+      --input FONTE              delimited (padrão), csv ou json. csv lê aspas do RFC 4180;
+                                 json lê um array de objetos (ou um objeto por linha) e liga
+                                 cada coluna do input à chave de mesmo nome
+      --input-delimiter CARACTERE  delimitador do CSV de entrada (padrão: vírgula)
+      --input-decimal CARACTERE  separador decimal dos números na entrada: . (padrão) ou ,
+                                 (com , lê 1.250,50 como 1250.50); CSV do Excel brasileiro:
+                                 --input csv --input-delimiter ';' --input-decimal ',' --encoding latin-1
+
+Opções de --format csv (padrão: RFC 4180, vírgula, aspas só quando necessárias):
+      --csv-delimiter CARACTERE  delimitador dos campos: ; | tab ... (padrão: vírgula)
+      --csv-quote MODO           minimal (padrão), strings (todo texto e o cabeçalho entre
+                                 aspas) ou all (todos os campos)
+      --csv-decimal CARACTERE    separador decimal dos números: . (padrão) ou ,
+      --csv-no-header            não escreve a linha de cabeçalho
 
 Opções de --format html (a saída é sempre UTF-8, sem linhas em branco de preenchimento):
       --template ARQUIVO         modelo HTML (padrão: folhas A4 embutidas)
@@ -96,6 +117,7 @@ Exemplos:
   rptgo relatorio.rp dados.txt > relatorio.txt
   rptgo --format json relatorio.rp dados.txt
   cat dados.txt | rptgo -o saida.txt relatorio.rp -
+  rptgo --format csv --csv-delimiter ';' --csv-quote strings --csv-decimal ',' relatorio.rp dados.txt
   rptgo --format html --box --template modelo.html --logo logo.svg relatorio.rp dados.txt > saida.html
 ```
 
@@ -413,6 +435,106 @@ Sul,Gina Rocha,310.1
 ]
 ```
 
+### 5. Fontes de dados: texto, CSV do Excel e JSON
+
+O mesmo script lê qualquer fonte; só muda a opção `--input`. O JSON pode ser um array de objetos
+(inclusive o que o próprio `--format json` gera) ou um objeto por linha; cada coluna do `input`
+busca a chave de mesmo nome, e chave ausente ou `null` vira campo vazio. O CSV aceita campos
+entre aspas, com delimitador e quebra de linha dentro, BOM e CRLF.
+
+<!-- file: examples/relatorio-vendas-regiao/dados.csv -->
+```text
+regiao,vendedor,valor
+Sul,Ana Souza,1250.50
+Norte,Bruno Lima,980.00
+Sul,Carla Dias,2100.75
+Leste,Diego Alves,450.25
+Norte,Elisa Prado,1320.40
+Leste,Fabio Neri,780.00
+Sul,Gina Rocha,310.10
+```
+
+<!-- file: examples/relatorio-vendas-regiao/dados.json -->
+```text
+[
+  {"regiao": "Sul", "vendedor": "Ana Souza", "valor": 1250.50},
+  {"regiao": "Norte", "vendedor": "Bruno Lima", "valor": 980.00},
+  {"regiao": "Sul", "vendedor": "Carla Dias", "valor": 2100.75},
+  {"regiao": "Leste", "vendedor": "Diego Alves", "valor": 450.25},
+  {"regiao": "Norte", "vendedor": "Elisa Prado", "valor": 1320.40},
+  {"regiao": "Leste", "vendedor": "Fabio Neri", "valor": 780.00},
+  {"regiao": "Sul", "vendedor": "Gina Rocha", "valor": 310.10}
+]
+```
+
+<!-- run-only -->
+```sh
+./rptgo --input csv examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.csv
+```
+
+<!-- run-only -->
+```sh
+./rptgo --input json examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.json
+```
+
+Os dois produzem exatamente o mesmo relatório do exemplo 1 de dados em texto. O CSV exportado
+pelo Excel com configuração regional brasileira usa `;` como delimitador e vírgula decimal
+(`1.250,50`). O RPT original só lê o ponto como separador decimal na entrada (o `RADIXSEP` só
+muda a exibição dos valores `amount`), então `--input-decimal ','` é uma extensão do `rptgo`,
+desligada por padrão. A opção "CSV (separado por vírgulas)" antiga grava em Windows-1252: nesse caso
+junte `--encoding latin-1`. O arquivo de exemplo
+[`dados-excel-br.csv`](examples/relatorio-vendas-regiao/dados-excel-br.csv) está nesse formato:
+
+```text
+﻿regiao;vendedor;valor
+Sul;Ana Souza;1.250,50
+Norte;Bruno Lima;980,00
+Sul;Carla Dias;2.100,75
+Leste;Diego Alves;450,25
+Norte;Elisa Prado;1.320,40
+Leste;Fabio Neri;780,00
+Sul;Gina Rocha;310,10
+```
+
+<!-- run -->
+```sh
+./rptgo --input csv --input-delimiter ';' --input-decimal ',' examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados-excel-br.csv
+```
+<!-- expect -->
+```text
+
+
+                       VENDAS POR REGIAO
+  Regiao       Vendedor                Valor
+  ----------------------------------------
+  Leste        Diego Alves           450.25
+  Leste        Fabio Neri            780.00
+  Total Leste                      1,230.25
+  Vendas:                              2
+
+  Norte        Bruno Lima            980.00
+  Norte        Elisa Prado         1,320.40
+  Total Norte                      2,300.40
+  Vendas:                              2
+
+  Sul          Ana Souza           1,250.50
+  Sul          Carla Dias          2,100.75
+  Sul          Gina Rocha            310.10
+  Total Sul                        3,661.35
+  Vendas:                              3
+
+  TOTAL GERAL                      7,192.00
+```
+
+**Direto de um banco, sem driver:** os clientes de linha de comando já exportam em texto, e o
+`rptgo` lê da entrada padrão (`-`). O padrão do `psql -A` já usa `|`:
+
+```sh
+psql -At -F'|' -c "select regiao, vendedor, valor from vendas" | ./rptgo relatorio.rp -
+sqlite3 -separator '|' vendas.db "select regiao, vendedor, valor from vendas" | ./rptgo relatorio.rp -
+mysql -B -e "select regiao, vendedor, valor from vendas" | ./rptgo --input csv --input-delimiter tab relatorio.rp -
+```
+
 Há mais exemplos em `examples/`: estoque por categoria (duas quebras com `count`/`total`/`avg`),
 cadastro de clientes (datas, `bool` e nulos), contas a receber (prazos e faixas de atraso) e
 vendas por região.
@@ -448,6 +570,15 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 - `--box` — troca caixas ASCII (`+---+` e `|`) por caracteres de desenho de linha (`┌─┬┐│├┼┤└┴┘`).
   Vale com `--format text` (`--encoding utf-8` ou `cp850`, que usa os bytes de caixa do DOS) e
   com `html`; não vale com `latin-1`, `csv` nem `json`.
+- `--input delimited|csv|json` — fonte dos dados (padrão: `delimited`, texto com o separador do
+  script). `csv` lê aspas do RFC 4180 e `json` lê um array de objetos (ou um objeto por linha),
+  ligando cada coluna do `input` à chave de mesmo nome (sem diferenciar maiúsculas).
+  `--input-delimiter CARACTERE` (`;`, `|`, `tab`...) escolhe o delimitador do CSV e
+  `--input-decimal ,` lê números como `1.250,50`. Veja "Fontes de dados".
+- `--csv-delimiter`, `--csv-quote minimal|strings|all`, `--csv-decimal`, `--csv-no-header` —
+  apresentação do `--format csv`: delimitador (`;`, `tab`...), aspas só quando necessárias
+  (padrão), em todo texto e no cabeçalho (`strings`) ou em todos os campos (`all`), vírgula
+  decimal e cabeçalho opcional.
 - `--template`, `--var NOME=VALOR`, `--logo`, `--title`, `--lines` — opções do `--format html`.
   `--format csv|json|html` não pode ser combinado com `--form-feed` (erro, código de saída 2).
   Valores inválidos em `--format`, `--header`, `--newline` e `--encoding` também dão erro

@@ -56,7 +56,7 @@ var reISO = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 func TestEscreveCSVHeaderEContagem(t *testing.T) {
 	s, rows := preparar(t, scriptTipos, dadosTipos)
 	var buf bytes.Buffer
-	if err := escreveCSV(&buf, s, rows); err != nil {
+	if err := escreveCSV(&buf, s, rows, csvPadrao); err != nil {
 		t.Fatal(err)
 	}
 	linhas := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
@@ -80,7 +80,7 @@ func TestEscreveCSVQuoting(t *testing.T) {
 		{"", "fim"},
 	}
 	var buf bytes.Buffer
-	if err := escreveCSV(&buf, s, rows); err != nil {
+	if err := escreveCSV(&buf, s, rows, csvPadrao); err != nil {
 		t.Fatal(err)
 	}
 	want := "a,b\n\"com,virgula\",\"com \"\"aspas\"\"\"\n\"linha1\nlinha2\",simples\n,fim\n"
@@ -102,7 +102,7 @@ func TestEscreveCSVDatasISO(t *testing.T) {
 	t.Setenv("CENTURY_CUTOFF", "50")
 	s, rows := preparar(t, scriptTipos, []string{"um|1|1.5|03/05/85|2020-01-15|yes", "dois|2|2|12/31/29|12/31/2019|no"})
 	var buf bytes.Buffer
-	if err := escreveCSV(&buf, s, rows); err != nil {
+	if err := escreveCSV(&buf, s, rows, csvPadrao); err != nil {
 		t.Fatal(err)
 	}
 	lido, err := csv.NewReader(&buf).ReadAll()
@@ -125,10 +125,10 @@ func TestEscreveCSVTiposEIgnoraLayout(t *testing.T) {
 	s1, r1 := preparar(t, scriptTipos, dadosTipos)
 	s2, r2 := preparar(t, strings.Replace(scriptTipos, "input\n", "width 40\nlength 10\ntop margin 5\ninput\n", 1), dadosTipos)
 	var a, b bytes.Buffer
-	if err := escreveCSV(&a, s1, r1); err != nil {
+	if err := escreveCSV(&a, s1, r1, csvPadrao); err != nil {
 		t.Fatal(err)
 	}
-	if err := escreveCSV(&b, s2, r2); err != nil {
+	if err := escreveCSV(&b, s2, r2, csvPadrao); err != nil {
 		t.Fatal(err)
 	}
 	if a.String() != b.String() {
@@ -240,5 +240,65 @@ func TestEscreveJSONEscapeEVazio(t *testing.T) {
 	buf.Reset()
 	if err := escreveJSON(&buf, s, nil); err != nil || strings.TrimSpace(buf.String()) != "[]" {
 		t.Errorf("vazio = %q (%v)", buf.String(), err)
+	}
+}
+
+func TestEscreveCSVOpcoes(t *testing.T) {
+	const script = "input\n  nome [string 30],\n  qtd [numeric],\n  preco [amount 10],\n  dt [date],\n  ok [bool]\ndetail\n  print nome\nend\n"
+	s, _ := preparar(t, script, []string{"x|1|1|01/01/2020|1"})
+	rows, _ := func() ([]report.Row, error) {
+		_, r := preparar(t, script, []string{"Ana; Maria|3|1234.5|15/03/1985|yes", "Plain|10|0.5||no", "|7||31/12/2020|"})
+		return r, nil
+	}()
+	casos := []struct {
+		nome string
+		opt  csvOpcoes
+		want string
+	}{
+		{"padrão", csvPadrao,
+			"nome,qtd,preco,dt,ok\nAna; Maria,3,1234.5,1985-03-15,true\nPlain,10,0.5,,false\n,7,,2020-12-31,\n"},
+		{"ponto e vírgula", csvOpcoes{Delim: ';', Aspas: aspasMinimas, Decimal: '.'},
+			"nome;qtd;preco;dt;ok\n\"Ana; Maria\";3;1234.5;1985-03-15;true\nPlain;10;0.5;;false\n;7;;2020-12-31;\n"},
+		{"texto entre aspas", csvOpcoes{Delim: ';', Aspas: aspasTexto, Decimal: '.'},
+			"\"nome\";\"qtd\";\"preco\";\"dt\";\"ok\"\n\"Ana; Maria\";3;1234.5;1985-03-15;true\n\"Plain\";10;0.5;;false\n\"\";7;;2020-12-31;\n"},
+		{"tudo entre aspas", csvOpcoes{Delim: ',', Aspas: aspasTodas, Decimal: '.'},
+			"\"nome\",\"qtd\",\"preco\",\"dt\",\"ok\"\n\"Ana; Maria\",\"3\",\"1234.5\",\"1985-03-15\",\"true\"\n\"Plain\",\"10\",\"0.5\",\"\",\"false\"\n\"\",\"7\",\"\",\"2020-12-31\",\"\"\n"},
+		{"decimal com vírgula", csvOpcoes{Delim: ';', Aspas: aspasTexto, Decimal: ','},
+			"\"nome\";\"qtd\";\"preco\";\"dt\";\"ok\"\n\"Ana; Maria\";3;1234,5;1985-03-15;true\n\"Plain\";10;0,5;;false\n\"\";7;;2020-12-31;\n"},
+		{"sem cabeçalho", csvOpcoes{Delim: '|', Aspas: aspasMinimas, Decimal: '.', SemCabecalho: true},
+			"Ana; Maria|3|1234.5|1985-03-15|true\nPlain|10|0.5||false\n|7||2020-12-31|\n"},
+		{"tab", csvOpcoes{Delim: '\t', Aspas: aspasMinimas, Decimal: '.', SemCabecalho: true},
+			"Ana; Maria\t3\t1234.5\t1985-03-15\ttrue\nPlain\t10\t0.5\t\tfalse\n\t7\t\t2020-12-31\t\n"},
+	}
+	for _, c := range casos {
+		var buf bytes.Buffer
+		if err := escreveCSV(&buf, s, rows, c.opt); err != nil {
+			t.Errorf("%s: %v", c.nome, err)
+			continue
+		}
+		if buf.String() != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.nome, buf.String(), c.want)
+		}
+	}
+}
+
+func TestEscreveCSVAspasEEscapesComDelimitadorNoTexto(t *testing.T) {
+	const script = "input\n  a [string 30]\ndetail\n  print a\nend\n"
+	s, _ := preparar(t, script, []string{"x"})
+	rows := []report.Row{{`diz "oi"; tchau`}, {" começa com branco"}, {"linha1\nlinha2"}, {""}}
+	var buf bytes.Buffer
+	if err := escreveCSV(&buf, s, rows, csvOpcoes{Delim: ';', Aspas: aspasMinimas, Decimal: '.'}); err != nil {
+		t.Fatal(err)
+	}
+	want := "a\n\"diz \"\"oi\"\"; tchau\"\n\" começa com branco\"\n\"linha1\nlinha2\"\n\"\"\n"
+	if buf.String() != want {
+		t.Errorf("got %q want %q", buf.String(), want)
+	}
+	// o que escrevemos volta idêntico pelo encoding/csv (com o mesmo delimitador)
+	r := csv.NewReader(strings.NewReader(buf.String()))
+	r.Comma = ';'
+	lido, err := r.ReadAll()
+	if err != nil || len(lido) != 5 || lido[1][0] != `diz "oi"; tchau` || lido[3][0] != "linha1\nlinha2" || lido[4][0] != "" {
+		t.Errorf("round-trip: %q %v", lido, err)
 	}
 }
