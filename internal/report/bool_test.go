@@ -58,6 +58,9 @@ func TestBoolNormalizacao(t *testing.T) {
 		{"-3", "YES"}, {"TRUE", "YES"}, {"YES", "YES"}, {"true", "YES"}, {"yes", "YES"},
 		{"Yep", "YES"}, {"tx", "YES"}, {"Y", "YES"}, {"t", "YES"},
 		{"5xx", "***"}, {"xxx", "***"}, {"0.x", "***"}, {"*", "***"},
+		{"nan", "NO"}, {"NaN", "NO"}, {"inf", "***"}, {"+Inf", "***"}, {"-inf", "***"},
+		{"infinity", "***"}, {"1_0", "***"}, {"1e999", "***"}, {"-0", "NO"}, {"1e-400", "NO"},
+		{"-1", "YES"}, {".5", "YES"}, {"1.", "YES"}, {"+1", "YES"},
 		{"", "***"}, {"   ", "***"},
 	}
 	const script = "input\n  id [numeric],\n  f [bool]\ndetail\n  print f\nend\n"

@@ -73,7 +73,9 @@ func boolParaInt(b bool) int64 {
 // bool: número float válido (0 = falso, outro = verdadeiro) ou texto cuja primeira letra,
 // sem diferenciar maiúsculas, é N/F (falso) ou Y/T (verdadeiro). Qualquer outra coisa é nulo.
 func normalizaBool(t string) Value {
-	if f, err := strconv.ParseFloat(t, 64); err == nil {
+	// Só números finitos e sem '_': "nan" e "inf" são texto (nan começa com N, logo falso;
+	// inf não começa com Y/T/N/F, logo nulo) e "1_0" não é um número válido.
+	if f, err := strconv.ParseFloat(t, 64); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) && !strings.Contains(t, "_") {
 		return f != 0
 	}
 	switch strings.ToUpper(t[:1]) {
