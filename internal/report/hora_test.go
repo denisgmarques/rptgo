@@ -69,11 +69,11 @@ func TestColunaTime(t *testing.T) {
 func TestHoraOperacoes(t *testing.T) {
 	script := scriptHora + "detail\n  print %s\nend\n"
 	ok := []struct{ expr, want string }{
-		{"1:00 + 60", "02:00"},
+		{"7:15 + 45", "08:00"},
 		{"23:30 + 60", "00:30"},
 		{"00:10 - 20", "23:50"},
-		{"60 + 1:00", "02:00"},
-		{"10:30 - 9:45", "45"},
+		{"45 + 7:15", "08:00"},
+		{"18:40 - 17:55", "45"},
 		{"h + 90", "16:00"},
 		{"h - g", "390"},
 		{"g - h", "-390"},

@@ -5,17 +5,18 @@ import (
 	"testing"
 )
 
-// Casos da tabela de exemplos do manual (seção "The Substring Operator"). Os resultados são
-// impressos entre colchetes para deixar visíveis os brancos e o texto vazio.
-func TestSubstrTabelaDoManual(t *testing.T) {
+// Fatiamento com substr: posições de 1 em diante, fim inclusivo e cortado no tamanho do texto,
+// início além do tamanho dá texto vazio. Os resultados são impressos entre colchetes para deixar
+// visíveis os brancos e o texto vazio.
+func TestSubstrTabela(t *testing.T) {
 	casos := []struct{ expr, want string }{
-		{"'AEIOU' substr [1-3]", "[AEI]"},
-		{"'AEIOU' substr [3-5]", "[IOU]"},
-		{"'AEIOU' substr [3-9]", "[IOU]"}, // fim além do tamanho é cortado
-		{"'AEIOU' substr [6-99]", "[]"},   // início além do tamanho: texto vazio
-		{"'AEIOU' substr [2-2]", "[E]"},   // um caractere
-		{"'AEIOU' substr [1-6]", "[AEIOU]"},
-		{"'AEIOU ' substr [6-107]", "[ ]"}, // o branco final é um caractere
+		{"'BANANA' substr [1-3]", "[BAN]"},
+		{"'BANANA' substr [4-6]", "[ANA]"},
+		{"'BANANA' substr [4-9]", "[ANA]"}, // fim além do tamanho é cortado
+		{"'BANANA' substr [7-99]", "[]"},   // início além do tamanho: texto vazio
+		{"'BANANA' substr [2-2]", "[A]"},   // um caractere
+		{"'BANANA' substr [1-6]", "[BANANA]"},
+		{"'BANANA ' substr [7-107]", "[ ]"}, // o branco final é um caractere
 	}
 	for _, c := range casos {
 		script := "input\n  n [numeric]\ndetail\n  print '[' + (" + c.expr + ") + ']'\nend\n"
@@ -122,12 +123,12 @@ func TestSubstrNulo(t *testing.T) {
 	}
 }
 
-// Concatenação indireta /+ (manual, "The Indirect Concatenation Operator").
+// Concatenação indireta /+: tira os brancos do fim do lado esquerdo.
 func TestConcatenacaoIndireta(t *testing.T) {
 	casos := []struct{ expr, want string }{
-		{"'ALPHA   ' /+ 'BET   '", "[ALPHABET   ]"},
-		{"'ALPHA   ' /+ '' /+ 'BET'", "[ALPHABET]"},
-		{"'ALPHA   ' + 'BET'", "[ALPHA   BET]"}, // + direto mantém os brancos
+		{"'CASA   ' /+ 'DOCE  '", "[CASADOCE  ]"},
+		{"'CASA   ' /+ '' /+ 'DOCE'", "[CASADOCE]"},
+		{"'CASA   ' + 'DOCE'", "[CASA   DOCE]"}, // + direto mantém os brancos
 		{"'A' /+ 'B' /+ 'C'", "[ABC]"},
 	}
 	for _, c := range casos {
