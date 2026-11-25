@@ -15,60 +15,145 @@ func lerArquivo(t *testing.T, caminho string) string {
 	return string(b)
 }
 
-// blocosPrimeirosPassos devolve o conteúdo dos blocos de código (```) da seção
-// "## Primeiros passos" do README, na ordem em que aparecem.
-func blocosPrimeirosPassos(t *testing.T) []string {
+// O README usa marcadores em comentários HTML (invisíveis na página) antes de blocos de código:
+//
+//	<!-- file: caminho -->   o bloco seguinte é idêntico ao arquivo
+//	<!-- run -->             o bloco seguinte é um comando ./rptgo ...
+//	<!-- expect -->          o bloco seguinte é a saída do último <!-- run -->
+//	<!-- run-only -->        o bloco seguinte é um comando que deve terminar com código 0
+//
+// Assim os scripts, os dados e as saídas mostrados no README nunca ficam diferentes do que o
+// programa faz (RF-12).
+type blocoReadme struct {
+	marcador string // "file", "run", "expect", "run-only"
+	arg      string // caminho (para "file")
+	texto    string
+	linha    int
+}
+
+func blocosMarcados(t *testing.T) []blocoReadme {
 	t.Helper()
-	readme := lerArquivo(t, "../../README.md")
-	i := strings.Index(readme, "## Primeiros passos")
-	if i < 0 {
-		t.Fatal("README sem a seção 'Primeiros passos'")
-	}
-	sec := readme[i+len("## Primeiros passos"):]
-	if j := strings.Index(sec, "\n## "); j >= 0 {
-		sec = sec[:j]
-	}
-	var blocos []string
-	partes := strings.Split(sec, "```\n")
-	// partes: texto, bloco, texto, bloco, ...
-	for k := 1; k < len(partes); k += 2 {
-		blocos = append(blocos, strings.TrimSuffix(partes[k], "\n"))
+	linhas := strings.Split(lerArquivo(t, "../../README.md"), "\n")
+	var blocos []blocoReadme
+	pend, arg := "", ""
+	for i := 0; i < len(linhas); i++ {
+		l := strings.TrimSpace(linhas[i])
+		switch {
+		case strings.HasPrefix(l, "<!-- file: ") && strings.HasSuffix(l, " -->"):
+			pend, arg = "file", strings.TrimSuffix(strings.TrimPrefix(l, "<!-- file: "), " -->")
+		case l == "<!-- run -->":
+			pend, arg = "run", ""
+		case l == "<!-- expect -->":
+			pend, arg = "expect", ""
+		case l == "<!-- run-only -->":
+			pend, arg = "run-only", ""
+		case strings.HasPrefix(l, "```") && pend != "":
+			ini := i
+			var corpo []string
+			for i++; i < len(linhas) && !strings.HasPrefix(strings.TrimSpace(linhas[i]), "```"); i++ {
+				corpo = append(corpo, linhas[i])
+			}
+			blocos = append(blocos, blocoReadme{pend, arg, strings.Join(corpo, "\n"), ini + 1})
+			pend, arg = "", ""
+		}
 	}
 	return blocos
 }
 
-// TestReadmePrimeirosPassos: os comandos e as saídas documentados no README reproduzem
-// exatamente o que o programa gera sobre os arquivos de examples/ (RF-12).
-func TestReadmePrimeirosPassos(t *testing.T) {
-	blocos := blocosPrimeirosPassos(t)
-	if len(blocos) < 2 || len(blocos)%2 != 0 {
-		t.Fatalf("esperado um número par de blocos de código (comando + saída), vieram %d", len(blocos))
+// argsDoComando transforma "./rptgo --opt "a b" x \ continuação > saida" nos argumentos do
+// programa: junta linhas continuadas com '\', respeita aspas duplas e descarta o redirecionamento.
+func argsDoComando(t *testing.T, cmd string) []string {
+	t.Helper()
+	cmd = strings.ReplaceAll(cmd, "\\\n", " ")
+	var args []string
+	var atual strings.Builder
+	temAtual, aspas := false, false
+	for _, r := range cmd {
+		switch {
+		case r == '"':
+			aspas, temAtual = !aspas, true
+		case (r == ' ' || r == '\n' || r == '\t') && !aspas:
+			if temAtual {
+				args = append(args, atual.String())
+				atual.Reset()
+				temAtual = false
+			}
+		default:
+			atual.WriteRune(r)
+			temAtual = true
+		}
 	}
-	var casos []struct{ cmd, saida string }
-	for i := 0; i < len(blocos); i += 2 {
-		casos = append(casos, struct{ cmd, saida string }{blocos[i], blocos[i+1]})
+	if temAtual {
+		args = append(args, atual.String())
 	}
-	for _, c := range casos {
-		var args []string
-		for _, ln := range strings.Split(c.cmd, "\n") {
-			if strings.HasPrefix(ln, "./rptgo ") {
-				args = strings.Fields(strings.TrimPrefix(ln, "./rptgo "))
+	if len(args) == 0 || args[0] != "./rptgo" {
+		t.Fatalf("o comando deveria começar com ./rptgo: %q", cmd)
+	}
+	args = args[1:]
+	for i, a := range args {
+		if a == ">" { // redirecionamento do shell: não faz parte dos argumentos
+			args = args[:i]
+			break
+		}
+	}
+	for i, a := range args {
+		if strings.HasPrefix(a, "examples/") {
+			args[i] = "../../" + a
+		}
+	}
+	return args
+}
+
+func TestReadmeBlocosConferem(t *testing.T) {
+	blocos := blocosMarcados(t)
+	var files, runs, expects, onlys int
+	var ultimoCmd []string
+	for _, b := range blocos {
+		onde := "README.md:" + itoa(b.linha)
+		switch b.marcador {
+		case "file":
+			files++
+			if want := strings.TrimRight(lerArquivo(t, "../../"+b.arg), "\n"); b.texto != want {
+				t.Errorf("%s: o bloco difere do arquivo %s\n--- README ---\n%s\n--- arquivo ---\n%s", onde, b.arg, b.texto, want)
+			}
+		case "run":
+			runs++
+			ultimoCmd = argsDoComando(t, b.texto)
+		case "expect":
+			expects++
+			if ultimoCmd == nil {
+				t.Fatalf("%s: <!-- expect --> sem <!-- run --> antes", onde)
+			}
+			code, out, errb := executa(t, "", ultimoCmd...)
+			if code != 0 {
+				t.Fatalf("%s: %v saiu com %d: %s", onde, ultimoCmd, code, errb)
+			}
+			if got := strings.TrimRight(out, "\n"); got != b.texto {
+				t.Errorf("%s: a saída documentada mudou para %v\n--- gerada ---\n%s\n--- README ---\n%s", onde, ultimoCmd, got, b.texto)
+			}
+			ultimoCmd = nil
+		case "run-only":
+			onlys++
+			args := argsDoComando(t, b.texto)
+			if code, _, errb := executa(t, "", args...); code != 0 {
+				t.Errorf("%s: %v saiu com %d: %s", onde, args, code, errb)
 			}
 		}
-		if args == nil {
-			t.Fatalf("bloco sem linha './rptgo ...':\n%s", c.cmd)
+	}
+	// o README é a vitrine do projeto: precisa ter os quatro tipos de bloco
+	if files < 6 || runs < 5 || expects != runs || onlys < 2 {
+		t.Errorf("poucos blocos verificados: file=%d run=%d expect=%d run-only=%d", files, runs, expects, onlys)
+	}
+}
+
+func TestReadmeImagensExistem(t *testing.T) {
+	readme := lerArquivo(t, "../../README.md")
+	for _, img := range []string{"docs/images/invoice.png", "docs/images/purchase-orders.png"} {
+		if !strings.Contains(readme, "]("+img+")") {
+			t.Errorf("o README não referencia %s", img)
 		}
-		for i, a := range args {
-			if strings.HasPrefix(a, "examples/") {
-				args[i] = "../../" + a
-			}
-		}
-		code, out, errb := executa(t, "", args...)
-		if code != 0 {
-			t.Fatalf("%v: exit %d: %s", args, code, errb)
-		}
-		if got := strings.TrimRight(out, "\n"); got != c.saida {
-			t.Errorf("a saída do README mudou para %v\n--- gerada ---\n%s\n--- README ---\n%s", args, got, c.saida)
+		if b, err := os.ReadFile("../../" + img); err != nil || len(b) < 1000 || string(b[1:4]) != "PNG" {
+			t.Errorf("%s ausente ou inválida: %v", img, err)
 		}
 	}
 }
