@@ -584,8 +584,9 @@ end
 <!-- data -->
 ```text
 x|p|1
-x|q|2
-y|p|3
+x|p|2
+x|q|3
+y|p|4
 ```
 <!-- output -->
 ```text
@@ -593,18 +594,24 @@ y|p|3
 [before a] x
   [before b] p
     [detail] 1
+    [detail] 2
   [after b] p
   [before b] q
-    [detail] 2
+    [detail] 3
   [after b] q
 [after a] x
 [before a] y
   [before b] p
-    [detail] 3
+    [detail] 4
   [after b] p
 [after a] y
 [after report]
 ```
+
+Há **um único `detail`** no script, e ele roda **uma vez para cada registro**, não uma vez por quebra:
+o grupo `x`/`p` tem dois registros, então `[detail]` aparece duas vezes seguidas sob o mesmo
+`[before b]`. Já o `before` e o `after` de um nível rodam uma vez por grupo (e, como ao mudar `a` o
+nível `b` também fecha, o `[after b]` vem antes do `[after a]`).
 
 **Cabeçalho e rodapé.** O `header` roda no topo de cada página nova e o `footer` no fim, e é
 empurrado até a última linha da página. O rodapé reserva espaço no fim, e `pageno` dá o número da
