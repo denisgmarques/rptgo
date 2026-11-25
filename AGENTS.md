@@ -15,27 +15,35 @@
 
 | Command | Purpose |
 |---|---|
-| `go build -o rptgo ./cmd/rptgo` | Build CLI binary (README.md "Primeiros passos") |
-| `./rptgo [opções] script.rp [entrada.txt \| -] > relatorio.txt` | Run a report script (README.md) |
+| `go build -o rptgo ./cmd/rptgo` | Build CLI binary |
+| `./rptgo [opções] script.rp [dados.txt \| -]` | Run a report script |
 | `./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt` | Run bundled example |
+| `./rptgo --help` | Print CLI help |
+| `go test ./...` | Run all tests (Go convention; no CI or Makefile defines it) |
 | `go test ./internal/report -run Golden -update` | Regenerate golden baselines (`internal/report/golden_test.go`) |
+| `scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (needs Go, Chrome/Chromium, `pdftoppm`; pins `RPT_NOW`) |
 
-- Test: no CI or Makefile target. Go convention `go test ./...` (stdlib `testing`, no mocks).
+- Test runner: Go stdlib `testing`.
+- `cmd/rptgo/readme_test.go` verifies README blocks: `TestReadmeBlocosConferem`, `TestReadmeImagensExistem`.
+- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go`.
 - Lint: none configured.
 - Coverage: none configured.
-- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go`.
 
 ## 2. Code Style & Project Conventions
 
 - Language: Go 1.25 (`go.mod`, module `rptgo`). No external deps, no `go.sum`.
 - Identifiers and code comments: pt-BR.
 - Docs and specs: English (`.claude/rules/bc-harness.md`).
-- `internal/report` holds the interpreter; compiler-enforced `internal`, importable only inside module `rptgo`.
-- `cmd/rptgo` holds CLI (package `main`): option parsing, writers, encodings.
+- `internal/report` holds the interpreter (lexer, parser, ast, tipos, interp, value, format, dates, config, errors).
+- `cmd/rptgo` holds CLI (package `main`): option parsing, writers (text, csv, json, html, box), encodings, help.
 - Golden baselines live in `internal/report/testdata/golden/`.
-- Env config read via `os.LookupEnv`/`Getenv` in `internal/report`: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
-- `RPT_NOW` fixes the clock via `report.Agora`.
-- Exit codes: 2 usage errors, invalid option values, `--format csv|json|html` with `--form-feed`; 1 script/data/I-O errors.
+- README blocks marked with `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` must match files and command output (`cmd/rptgo/readme_test.go`).
+- Named expressions `<name> expr` in `sort` and `print` items act as columns; cycles and conflicts with columns/set variables are errors (`tipos.go`, `verificaNomes`).
+- `sort a, b` takes break-level names from columns; explicit `<name>` only for computed keys.
+- Env config: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- `RPT_NOW` fixes the clock.
+- Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage or option values.
+- Language behavior reference: the public RPT report-language documentation; behavior is pinned by the tests under `internal/report` and `cmd/rptgo`.
 - Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
@@ -48,10 +56,11 @@
 
 - Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); `.claude/rules/bc-harness.md` forbids it.
 - Never add external dependencies; module has none.
+- Never leave README blocks out of sync with scripts or output; `cmd/rptgo/readme_test.go` fails.
 
 ## 4. Setup, Troubleshooting and Tips
 
-- Prereq: Go 1.25.
+- Prereq: Go 1.25. Image regeneration also needs Chrome/Chromium and `pdftoppm`.
 
 ```sh
 go build -o rptgo ./cmd/rptgo
@@ -64,17 +73,19 @@ go build -o rptgo ./cmd/rptgo
 | Symptom | Check |
 |---|---|
 | Exit code 2 | Usage error, invalid option value, or `--form-feed` with `--format csv\|json\|html` |
-| Exit code 1 | Script, data or I/O error; read source-line context in message |
+| Exit code 1 | Script, data, I/O or template error; read source-line context in message |
 | Non-deterministic dates in output | Set `RPT_NOW` |
 | Golden test fails after intended change | Run golden update command from section 1 |
+| README test fails | Re-sync block with file or command output |
 
 ## 5. References
 
 | Doc | Purpose |
 |---|---|
-| [README.md](README.md) | User docs (pt-BR): usage, language, examples |
+| [README.md](README.md) | User docs (pt-BR): showcase, usage, language, examples |
 | [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
 | [examples/](examples) | 7 examples, each with `.rp` script and data file |
+| [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README preview image generator |
 
 ## 6. Agent Documentation
 

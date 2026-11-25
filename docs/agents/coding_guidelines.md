@@ -4,36 +4,42 @@
 
 ## AS IS — Current state
 
-No linter, `.editorconfig` or pre-commit hook exists; patterns below are verified in source. Project rule `.claude/rules/bc-harness.md`: docs/specs in English.
+### 1. Portuguese identifiers and comments
 
-### 1. Portuguese identifiers and messages
+- Identifiers, comments and user-facing messages are pt-BR (`executar`, `leRegistros`, `NovoInterp`, `Erro`); exported API names mix (`Tokenize`, `Parse`, `Agora`).
+- Docs under `docs/` are English (`.claude/rules/bc-harness.md`). No linter enforces either.
 
-- Identifiers, comments, error messages use pt-BR (`executar`, `analisaArgs`, `Erro`, `NovoInterp`); README is pt-BR.
-- Keep new user-facing messages in pt-BR to match.
+### 2. Single error type with source context
 
-### 2. Stdlib only
+- Library errors go through `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`internal/report/errors.go`); the line plus a `^` marker is appended from `FonteScript`/`FonteDados`.
+- CLI prints `<program>: <err>` to stderr and returns an exit code from `executar` (`main.go`); `main` only calls `os.Exit`.
 
-- `go.mod` declares no requirements; features (CP850 table, template engine, CSV/JSON writers) are hand-written.
-- `json.go` builds objects by hand to preserve `input` column order and ISO dates.
+### 3. Manual option parsing with shared value lists
 
-### 3. Interpreter behind `internal/`
+- `analisaArgs` parses argv by hand (not `flag`) so options and positionals mix freely.
+- Allowed values live once in `ajuda.go` (`valoresHeader`, `valoresNewline`, `valoresFormato`, `valoresEncoding`) and feed both validation and help text.
+- Option-combination errors return exit 2.
 
-- All language logic lives in `internal/report`; `cmd/rptgo` only calls exported `Tokenize`, `Parse`, `NovoInterp`, `Run`, `Paginas`, `LinhasOrdenadas`, `Agora`.
+### 4. Testable entrypoint
 
-### 4. Testable entry point
+- `executar(args, stdin, stdout, stderr) int` takes injected streams; tests call it directly (`executa` helper in `cmd/rptgo/*_test.go`).
 
-- `main()` only calls `os.Exit(executar(args, stdin, stdout, stderr))`; tests inject streams.
+### 5. Golden and doc-verified tests
 
-### 5. Errors carry source context
+- Golden baselines in `internal/report/testdata/golden`, rewritten only with `-update` (`golden_test.go`).
+- README blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` are executed by `readme_test.go`; update README and code together.
+- Time-dependent output pins `RPT_NOW`.
 
-- `errors.go` attaches script line (`Erro`, `ErroLinhaDados`); HTML template errors report template line (`modelo, linha N`).
-- Exit codes: 1 runtime/script/data, 2 usage.
+### 6. Dynamic values, null-aware operators
 
-### 6. Golden and example tests
+- `Value = any` holding nil, int64, float64, string, time.Time or bool (`value.go`); every operator normalizes nil and bool before use (`normaliza`, `aritm`, `comparar`).
 
-- `internal/report/testdata/golden` baselines; `examples_test.go` runs `examples/`; `readme_test.go` checks README.
+### 7. Static checks at parse end
+
+- `Parse` finishes with `verificaNomes` then `verificaTipos` (`tipos.go`); bad scripts fail before data is read.
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — layers these patterns apply to
-- [`tech_stack.md`](tech_stack.md) — tests and tooling
+- [`architecture.md`](architecture.md) — layers and files these patterns live in
+- [`domain_rules.md`](domain_rules.md) — language rules the checks enforce
+- [`tech_stack.md`](tech_stack.md) — test tooling

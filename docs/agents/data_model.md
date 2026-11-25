@@ -6,9 +6,9 @@
 
 ### Not applicable in this repository
 
-No persistence: no migrations directory, no ORM or schema files, no database driver in `go.mod` (0 requirements). Data enters as a delimited text file or stdin and leaves via stdout or `-o`. In-memory only: `Row` is a positional `[]Value` in `input` column order (nil = null), with one `Interp.colIdx` name-to-position map shared by all rows (`internal/report/interp.go`). Cache: none.
+No persistence: no migrations directory, no ORM models, no schema files, no database driver (`go.mod` has no requirements). Input is a flat text file or stdin parsed at run time into in-memory rows: `Row = []Value` in column order of `input`, resolved by name through `Interp.colIdx` (`internal/report/interp.go`); `Value` is nil, int64, float64, string, time.Time or bool. Nothing is cached or written except the report output; sample data lives in `examples/*/` and `internal/report/testdata/golden/*.dat`.
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — value types and parsing
-- [`architecture.md`](architecture.md) — layers
+- [`domain_rules.md`](domain_rules.md) — column types and null handling
+- [`architecture.md`](architecture.md) — interpreter layer that holds rows

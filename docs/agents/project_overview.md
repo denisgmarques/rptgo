@@ -6,39 +6,42 @@
 
 ### Purpose
 
-Run RPT-style report scripts (`.rp`) over delimited text data and emit paginated text, CSV, JSON or HTML (`cmd/rptgo/main.go`, `internal/report/`).
+`rptgo` is a Go CLI that runs a declarative report script (`.rp`, RPT-style language) over pipe-separated text data and writes a paginated text report, CSV, JSON or HTML (`cmd/rptgo/main.go`, `README.md`).
 
 ### Business problem
 
-- Without it, legacy RPT report scripts have no runnable interpreter; `README.md` (pt-BR) presents rptgo as a Go reimplementation.
-- Control-break reports (sort, `before`/`after` sections, totals) need a fixed-width paginated layout: `interp.go` handles sort, cascading breaks, pagination.
+- Text data (database or business-system exports) needs aligned columns, per-page header/footer, cascading control breaks and per-level count/total/avg/min/max (`README.md`, `internal/report/interp.go` `executa`).
+- Hand-coding that layout per report is costly; one `.rp` script feeds text, CSV, JSON and HTML output (`--format`).
+- Legacy RPT scripts need a runnable engine.
 
 ### Consumers and integrations
 
 | System | Role |
 |---|---|
-| Shell / CLI user | Invokes `rptgo script.rp [data]`; data from file or stdin (`-`) |
-| stdout / `-o` file | Report output (text, csv, json, html) |
-| HTML template file | `--template`, `--var`, `--logo` (data URI) feed `cmd/rptgo/html.go` |
-| Env vars | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
+| Shell / pipelines | Invoke `rptgo [opts] script.rp [data.txt \| -]`; stdin when data omitted or `-` |
+| Line/dot-matrix printers | Consume text output; `--encoding cp850\|latin-1`, `--newline crlf`, `--form-feed` |
+| Spreadsheet/JSON consumers | Read `--format csv` / `--format json` |
+| Browser / PDF printing | Read `--format html` (A4 sheets, optional `--template`, `--logo`); `scripts/render-readme-images.sh` uses Chrome + pdftoppm for README PNGs |
+| Environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
 
 ### Macro flow
 
-1. `main()` calls `executar` — parse options (`analisaArgs`); `-h/--help` exits 0.
-2. Read script file, decode (`--encoding`), `report.Tokenize` then `report.Parse` (includes static logical/arithmetic type check).
-3. `--check`: print syntax OK, exit 0.
-4. Read data (file or stdin), decode, split rows by `SEPARATOR` (default `|`), drop header per `--header`.
-5. `report.NovoInterp` converts rows to typed values (`input` section).
-6. By `--format`: text `Interp.Run`; csv/json `Interp.LinhasOrdenadas` (no event sections); html `Interp.Paginas` + template.
-7. Optional `--box` line-drawing conversion; encode (utf-8/latin-1/cp850) and newline mode; write to stdout or `-o`.
+1. `main` -> `executar`: parse argv (`analisaArgs`), validate option combos; exit 2 on misuse.
+2. Read script file, decode (`--encoding`), `report.Tokenize` -> `report.Parse` (static type + name checks).
+3. `--check`/`-r`: print "No syntax errors were found in the report script." and exit 0.
+4. Read data (file or stdin), decode, split into records (`leRegistros`; header line dropped per `--header`).
+5. `report.NovoInterp` converts fields to typed values per `input` columns.
+6. By format: text -> `Interp.Run`; csv/json -> `LinhasOrdenadas` (sort only, no events); html -> `Interp.Paginas` + template.
+7. Optional `--box`, CRLF conversion, re-encode; write to `-o` file or stdout. Exit 0, or 1 on script/data/IO/template error.
 
 ### Out of scope
 
-- No database or network I/O: input is a file or stdin only.
-- csv/json skip `header`/`detail`/`before`/`after` sections (comment in `main.go`).
+- No network, database or daemon: flat-file input only.
+- CSV/JSON ignore event sections, width, length and margins (`cmd/rptgo/csv.go`).
+- HTML output is always UTF-8 and has no blank-line padding (`main.go`).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — layout and layers
-- [`domain_rules.md`](domain_rules.md) — language semantics
+- [`architecture.md`](architecture.md) — layout, layers, pipeline
+- [`domain_rules.md`](domain_rules.md) — .rp language semantics
 - [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, template placeholders

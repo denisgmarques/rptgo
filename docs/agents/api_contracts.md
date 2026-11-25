@@ -4,64 +4,58 @@
 
 ## AS IS — Current state
 
-### HTTP endpoints
+### CLI
 
-No HTTP endpoints. Contract = CLI flags, exit codes, HTML template placeholders. Source: `cmd/rptgo/main.go`, `ajuda.go`, `html.go`.
+Usage: `rptgo [OPTION]... SCRIPT.rp [INPUT.txt | -]`. Binary name in messages comes from `argv[0]`. No network API; contract = flags, exit codes, output formats, HTML template.
 
-Usage: `rptgo [options] script.rp [data|-]`
-
-### CLI options
-
-| Option | Values | Notes |
+| Flag | Values | Notes |
 |---|---|---|
-| `-h`, `--help` | | help on stdout, exit 0 |
-| `-o`, `--saida`, `--output` | path | default stdout |
-| `--encoding` | `utf-8` `latin-1` `cp850` | case-insensitive, validated |
-| `--header` | `auto` `sim` `nao` | validated |
-| `--newline` | `auto` `lf` `crlf` | validated |
-| `--format` | `text` `csv` `json` `html` | |
-| `--form-feed` | | rejected (exit 2) with csv/json/html |
-| `--box` | | text or html only; not with `latin-1` |
-| `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines N` | | HTML-only; rejected with other formats; `--var` repeatable; `--logo` png/jpg/gif/svg/webp |
-| `--strict` | | lexer strict mode |
-| `--check`, `-r` | | syntax check only |
+| `-o, --saida, --output FILE` | path | write file instead of stdout |
+| `--format` | `text`(default) `csv` `json` `html` | csv/json/html reject `--form-feed` |
+| `--encoding` | `utf-8` `utf8` `latin-1` `latin1` `iso-8859-1` `iso8859-1` `cp850` | case-insensitive; reads and writes; html output always UTF-8 |
+| `--header` | `auto` `sim` `nao` | first data line is header |
+| `--form-feed` | flag | `\f` between pages |
+| `--newline` | `auto` `lf` `crlf` | auto = crlf on Windows |
+| `--box` | flag | text or html only; not with latin-1 |
+| `--strict` | flag | single-line comments |
+| `--template FILE`, `--var NAME=VALUE` (repeat), `--logo FILE`, `--title TEXT`, `--lines N` | html only | NAME matches `[A-Za-z_][A-Za-z0-9_]*`; N >= 1; logo png/jpg/jpeg/gif/svg/webp |
+| `-r, --check` | flag | syntax check only |
+| `-h, --help` | flag | exit 0, help to stdout |
 
-### Exit codes
+Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage (unknown option, bad value, missing script, forbidden combination). Errors go to stderr as `rptgo: <msg>`; usage errors add `Tente 'rptgo --help' para mais informações.`
 
-| Code | Meaning |
-|---|---|
-| 0 | ok, `--help`, `--check` |
-| 1 | script, data, I/O or template error |
-| 2 | invalid usage/option values; no script (full help on stderr) |
-
-### Command example
+Example:
 
 ```
-rptgo --format json examples/payroll-by-department/report.rp examples/payroll-by-department/data.txt
+rptgo --format html --box --template modelo.html --logo logo.svg relatorio.rp dados.txt > saida.html
 ```
 
-Input row (`examples/payroll-by-department/data.txt`): `Engineering|Maria Santos|2018-03-12|yes|9200.00`
+### Output formats
 
-### JSON output (`json.go`)
+- text: paginated report, `\n` (or `\r\n`).
+- csv: header of input column names, comma delimiter, RFC 4180 quoting, rows in sort order; dates `YYYY-MM-DD`, null empty, numbers shortest decimal, bool `true`/`false`.
+- json: array, one object per line, keys in input order; null -> `null`; empty -> `[]`.
+
+Sample from `examples/invoice-aging/data.txt` (columns customer, invoice, issued, due, amount, paid) with `--format json`:
 
 ```json
 [
-{"dept":"Engineering","employee":"Maria Santos","hired":"2018-03-12","active":true,"salary":9200}
+{"customer":"Acme Corp","invoice":"INV-1001","issued":"2026-03-01","due":"2026-03-31","amount":12500,"paid":true},
+{"customer":"Acme Corp","invoice":"INV-1042","issued":"2026-04-15","due":"2026-06-14","amount":8300.5,"paid":false}
 ]
 ```
 
-- Keys in `input` order; dates `YYYY-MM-DD`; nulls `null`; empty result `[]`.
-- CSV: same rows, ISO dates, `true/false`, nulls empty.
+### HTML template
 
-### HTML template placeholders
-
-- `{{Name}}` HTML-escaped; `{{#Pages}} ... {{/Pages}}` repeats per page.
-- Global: `Title Script Date Time Columns PageCount Logo` plus `--var` names.
-- In page block: `PageNumber`, `Text`.
-- Reserved for `--var`: `Title Script Date Time Columns PageCount Logo PageNumber Text`.
-- Unknown variable or bad marker -> error `modelo, linha N: ...`, exit 1. Output always UTF-8. Example: `examples/invoice-html/template.html`.
+- Plain text with `{{Name}}` (HTML-escaped) and one `{{#Pages}}...{{/Pages}}` block repeated per page; missing, nested or duplicated block errors with template line.
+- Globals: `Title` (default script basename), `Script`, `Date` (`YYYY-MM-DD`), `Time` (`HH:MM`), `Columns`, `PageCount`, `Logo` (data URI, empty if no `--logo`), plus `--var`.
+- In block only: `PageNumber`, `Text`.
+- Unknown variable -> error; `--var` using a reserved name -> error.
+- Default template: embedded A4 sheets; logo `<img>` only with `--logo`. Example: `examples/invoice-html/template.html`.
+- Lines per page default `length - top - bottom`; override `--lines`.
 
 ## Related documents
 
+- [`domain_rules.md`](domain_rules.md) — .rp language semantics
+- [`architecture.md`](architecture.md) — format dispatch in `main.go`
 - [`project_overview.md`](project_overview.md) — macro flow
-- [`domain_rules.md`](domain_rules.md) — script semantics

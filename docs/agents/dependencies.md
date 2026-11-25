@@ -6,21 +6,23 @@
 
 ### External services
 
-None. No network clients; `go.mod` has no requirements. I/O: local files, stdin, stdout.
+| Service | Purpose |
+|---|---|
+| None at runtime | Stdlib only; no network clients |
 
 ### Internal libraries
 
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | Interpreter: lexer, parser, type check, interpreter, formats, dates, env config |
+| `rptgo/internal/report` | Lexer, parser, interpreter, formatting; imported by `cmd/rptgo` |
 
 ### Shared infrastructure
 
-- No queues, caches or observability.
-- Environment variables read by `internal/report/config.go`: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
-- Stdlib beyond core in `cmd/rptgo`: `encoding/base64`, `html`, `path/filepath`, `regexp`, `unicode/utf8`.
+- Go modules: `go.mod` (`go 1.25`), 0 third-party requirements, no `go.sum`.
+- Dev-only tooling in `scripts/render-readme-images.sh`: Go, Google Chrome/Chromium, `pdftoppm` (poppler-utils).
+- No queues, caches, CI or observability.
 
 ## Related documents
 
-- [`tech_stack.md`](tech_stack.md) — runtime and tests
+- [`tech_stack.md`](tech_stack.md) — language, tests
 - [`architecture.md`](architecture.md) — package layout
