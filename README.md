@@ -4,7 +4,9 @@
 devem ser ordenados, agrupados e totalizados, e o `rptgo` entrega o relatório: texto paginado
 para impressora, **PDF com logo e layout**, CSV ou JSON, a partir da mesma definição.
 
-![Fatura em PDF gerada pelo rptgo](docs/images/invoice.png)
+![Demonstração: um curl à BrasilAPI, o script .rp e o relatório de feriados gerado pelo rptgo](docs/images/demo.gif)
+
+O exemplo [Feriados do ano](examples/feriados-brasil/README.md): um `curl`, o script e o relatório. A fatura em PDF está no exemplo [Fatura em HTML/PDF](examples/invoice-html/README.md).
 
 **Documentação:** [Referência da linguagem](REFERENCIA.md) · [Exemplos](#exemplos) · [Saída HTML e caixas](SAIDA-HTML.md)
 
@@ -151,7 +153,7 @@ internal/report/    interpretador: léxico, parser, tipos, execução, máscaras
 examples/           um exemplo por pasta, cada um com a sua página (README.md)
 REFERENCIA.md       referência da linguagem, com exemplos conferidos por testes
 SAIDA-HTML.md       saída HTML/PDF: modelo, variáveis, logo e caixas
-scripts/            render-readme-images.sh gera as imagens (docs/images)
+scripts/            render-readme-images.sh e render-readme-demo.py geram as imagens e o GIF (docs/images)
 ```
 
 ## Licença

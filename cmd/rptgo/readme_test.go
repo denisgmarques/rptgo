@@ -180,9 +180,10 @@ func TestReadmeImagensExistem(t *testing.T) {
 			t.Errorf("%s ausente ou inválida: %v", img, err)
 		}
 	}
-	// o README mostra a fatura no topo e aponta para a referência e para os exemplos
+	// o README mostra o GIF da demonstração no topo e aponta para a referência e para os exemplos
+	// (a fatura em PDF fica na página do exemplo invoice-html, conferida acima)
 	readme := lerArquivo(t, "../../README.md")
-	for _, want := range []string{"](docs/images/invoice.png)", "](REFERENCIA.md)", "](#exemplos)"} {
+	for _, want := range []string{"](docs/images/demo.gif)", "](REFERENCIA.md)", "](#exemplos)"} {
 		if !strings.Contains(readme, want) {
 			t.Errorf("o README não contém %s", want)
 		}
