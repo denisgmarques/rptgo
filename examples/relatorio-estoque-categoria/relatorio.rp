@@ -1,0 +1,37 @@
+/* Estoque por categoria e subcategoria: dois niveis de quebra em cascata.
+   Cada nivel fecha com contagem, total e media do valor em estoque. */
+input
+   categoria     [string 12],
+   subcategoria  [string 14],
+   produto       [string 20],
+   quantidade    [numeric 6],
+   preco         [amount 10]
+
+width 72
+length 60
+sort <cat> categoria, <sub> subcategoria
+
+before report
+   print 'ESTOQUE POR CATEGORIA' centered
+   skip
+
+before cat
+   print 'Categoria: ' + categoria in col 1
+
+before sub
+   print 'Subcategoria: ' + subcategoria in col 3
+
+detail
+   print produto in col 5, quantidade in col 24 using '#####&', preco in col 32 using '###,##&.&&', quantidade * preco in col 46 using '#,###,##&.&&'
+
+after sub
+   print 'Produtos:' in col 5, count(*) in col 24 using '#####&', 'Valor:' in col 32, total(quantidade * preco) in col 46 using '#,###,##&.&&'
+   print 'Preco medio:' in col 5, avg(preco) in col 32 using '###,##&.&&'
+
+after cat
+   print 'Itens na categoria:' in col 3, count(*) in col 24 using '#####&', total(quantidade * preco) in col 46 using '#,###,##&.&&'
+   skip
+
+after report
+   print 'TOTAL EM ESTOQUE' in col 1, total(quantidade * preco) in col 46 using '#,###,##&.&&'
+end

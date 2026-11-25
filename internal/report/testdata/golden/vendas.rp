@@ -1,0 +1,26 @@
+/* Vendas por regiao: uma quebra (regiao) com total e contagem no fim de cada grupo. */
+input
+   regiao    [string 10],
+   vendedor  [string 14],
+   valor     [amount 10]
+
+width 60
+length 26
+sort regiao
+
+before report
+   print 'VENDAS POR REGIAO' centered
+   print 'Regiao' in col 1, 'Vendedor' in col 14, 'Valor' in col 38
+   print 40[-] in col 1
+
+detail
+   print regiao in col 1, vendedor in col 14, valor in col 30 using '#,###,##&.&&'
+
+after regiao
+   print 'Total ' + regiao in col 1, total(valor) in col 30 using '#,###,##&.&&'
+   print 'Vendas:' in col 1, count(*) in col 30 using '#########'
+   skip
+
+after report
+   print 'TOTAL GERAL' in col 1, total(valor) in col 30 using '#,###,##&.&&'
+end

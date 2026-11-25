@@ -1,0 +1,33 @@
+/* Cobre datas, bool, today/hour/pageno, header/footer, ordenacao desc e if/else. */
+input
+   id      [numeric 4],
+   nome    [string 12],
+   nasc    [date 8],
+   cadast  [ldate 10],
+   ativo   [bool],
+   saldo   [float 10]
+
+width 70
+length 12
+sort <n> nome desc
+
+before report
+   print 'MISTO' centered
+   print today in col 1, hour in col 20
+
+header
+   print 'pag' in col 1, pageno using '###&'
+
+footer
+   print 'fim da pagina' in col 1
+
+detail
+   print id in col 1, nome in col 6, nasc in col 20, cadast in col 30, ativo in col 42
+   if saldo > 100 and ativo then print 'alto' in col 50 else print 'baixo' in col 50
+
+after n
+   print 'saldo:' in col 1, total(saldo) in col 10 using '###,##&.&&'
+
+after report
+   print 'ativos:' in col 1, count(* where ativo) in col 10 using '####&'
+end

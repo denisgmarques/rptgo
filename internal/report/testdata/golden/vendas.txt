@@ -1,0 +1,26 @@
+
+
+                       VENDAS POR REGIAO
+  Regiao       Vendedor                Valor
+  ----------------------------------------
+  Leste        Diego Alves           450.25
+  Leste        Fabio Neri            780.00
+  Total Leste                      1,230.25
+  Vendas:                              2
+
+  Norte        Bruno Lima            980.00
+  Norte        Elisa Prado         1,320.40
+  Total Norte                      2,300.40
+  Vendas:                              2
+
+  Sul          Ana Souza           1,250.50
+  Sul          Carla Dias          2,100.75
+  Sul          Gina Rocha            310.10
+  Total Sul                        3,661.35
+  Vendas:                              3
+
+  TOTAL GERAL                      7,192.00
+
+
+
+

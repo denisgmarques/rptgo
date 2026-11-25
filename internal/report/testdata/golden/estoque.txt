@@ -1,0 +1,60 @@
+
+
+                           ESTOQUE POR CATEGORIA
+
+  Categoria: Bebidas
+    Subcategoria: Refrigerantes
+      Cola 2L               200        7.90        1,580.00
+      Guarana 2L            150        6.80        1,020.00
+      Produtos:               2  Valor:            2,600.00
+      Preco medio:                     7.35
+    Subcategoria: Sucos
+      Suco de laranja       120        4.50          540.00
+      Suco de uva            80        5.20          416.00
+      Produtos:               2  Valor:              956.00
+      Preco medio:                     4.85
+    Itens na categoria:       4                    3,556.00
+
+  Categoria: Limpeza
+    Subcategoria: Desinfetantes
+      Desinfetante pinho     60        9.40          564.00
+      Produtos:               1  Valor:              564.00
+      Preco medio:                     9.40
+    Subcategoria: Detergentes
+      Detergente neutro     300        2.30          690.00
+      Lava-loucas            90        8.75          787.50
+      Produtos:               2  Valor:            1,477.50
+      Preco medio:                     5.53
+    Itens na categoria:       3                    2,041.50
+
+  Categoria: Mercearia
+    Subcategoria: Graos
+      Arroz 5kg              75       24.90        1,867.50
+      Feijao 1kg            110        8.60          946.00
+      Produtos:               2  Valor:            2,813.50
+      Preco medio:                    16.75
+    Subcategoria: Massas
+      Macarrao 500g         180        4.10          738.00
+      Produtos:               1  Valor:              738.00
+      Preco medio:                     4.10
+    Itens na categoria:       3                    3,551.50
+
+  TOTAL EM ESTOQUE                                 9,149.00
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
