@@ -6,50 +6,46 @@
 
 ### Style
 
-Two-package Go module `rptgo`: thin CLI (`cmd/rptgo`) over an interpreter library (`internal/report`) with a lexer, parser, AST and tree-walking interpreter pipeline.
+Two-package Go CLI: thin `package main` front end over an interpreter library hidden by Go `internal/` visibility (`internal/report`).
 
 ### Directory layout
 
 ```
-cmd/rptgo/                CLI: main.go (args, I/O, encodings), csv.go, json.go, cp850.go (256-entry table), *_test.go
-internal/report/          interpreter library
-  lexer.go                Tokenize (comments, strict single-line comments)
-  parser.go               Parse -> Script; defaults, sections, statements
-  ast.go                  Expr/Stmt nodes, InputCol, SortKey, EventKey, Script
-  tipos.go                static logical-vs-arithmetic check (verificaTipos)
-  interp.go               Interp: row conversion, evaluation, sort, break cascade, pagination
-  value.go                Value (any), verdade, comparar, aritm, normalizaBool
-  format.go               FmtMascara (using masks), QuebraTexto
-  dates.go                ParseData, FmtData, horaAtual
-  config.go               cfg() env reader, agora() (RPT_NOW)
-  errors.go               Error type, line-context messages
-  testdata/golden/        *.rp, *.dat, *.txt baselines
-examples/                 relatorio-vendas-regiao/, relatorio-estoque-categoria/ (relatorio.rp + dados.txt)
-docs/agents/              generated docs
+cmd/rptgo/            CLI (package main)
+  main.go             option parsing, I/O, format dispatch, exit codes
+  ajuda.go            --help text, usage-error hint, program name from argv[0]
+  box.go              --box: ASCII boxes -> line-drawing chars (Unicode or CP850)
+  html.go             --format html: {{Name}} template engine, built-in A4 template
+  csv.go json.go      --format csv|json writers
+  cp850.go            CP850 table (256 entries)
+  *_test.go           main, saida, cp850, examples, readme, ajuda, box, html
+internal/report/      interpreter
+  lexer.go parser.go ast.go   tokenizer, parser, AST
+  tipos.go            static logical-vs-arithmetic check
+  interp.go           sort, breaks, pagination (Run, Paginas, LinhasOrdenadas)
+  value.go format.go dates.go values, `using` masks, dates
+  errors.go           source-line error context
+  config.go           env config, report.Agora (RPT_NOW)
+  testdata/golden/    golden baselines
+examples/             7 examples (.rp + data; invoice-html adds template.html, logo.svg)
 ```
 
 ### Layer responsibilities
 
 | Layer | Owns | Does NOT own |
 |---|---|---|
-| `cmd/rptgo` | Flags, file/stdin/stdout I/O, encoding (utf-8, latin-1, cp850), newline, record splitting, CSV/JSON serialization, exit codes | Script semantics, typing, pagination |
-| Lexer/parser (`lexer.go`, `parser.go`, `ast.go`) | Tokens, `Script` tree, defaults (width 80, length 66, margins 2, separator `\|`) | Evaluation |
-| Type check (`tipos.go`) | Reject arithmetic where logical required | Runtime values |
-| Interpreter (`interp.go`, `value.go`) | Typing of input, expression eval, sort, breaks, aggregates, pages | File I/O, encodings |
-| Formatting (`format.go`, `dates.go`) | `using` masks, word wrap, date/time text | Layout/columns |
-| `config.go` | Env config and fixed clock | Parsing |
+| `cmd/rptgo` | Flags, file/stdin I/O, encodings, newline, csv/json/html rendering, box drawing, exit codes | Parsing or executing scripts |
+| `internal/report` | Lexing, parsing, type check, evaluation, sorting, breaks, pagination, masks, dates, env config | Flags, output encoding, HTML/CSV/JSON |
 
 ### External integration points
 
 | System | Client/config | Notes |
 |---|---|---|
-| Process environment | `os.LookupEnv` in `config.go`, `parser.go` | 9 variables; `RPT_NOW` pins the clock |
-| Filesystem / stdin / stdout | `os.ReadFile`, `os.Open`, `os.Create` in `main.go` | Whole input read into memory (`io.ReadAll`) |
-
-No async, queues or network clients.
+| Filesystem / stdin / stdout | `os.ReadFile`, `os.Open`, `-o` | Only I/O boundary |
+| Environment | `config.go` `cfg()` | 9 variables, see `tech_stack.md` |
 
 ## Related documents
 
 - [`project_overview.md`](project_overview.md) — purpose and macro flow
-- [`domain_rules.md`](domain_rules.md) — interpreter semantics
-- [`tech_stack.md`](tech_stack.md) — runtime and tests
+- [`tech_stack.md`](tech_stack.md) — language, tests, env config
+- [`coding_guidelines.md`](coding_guidelines.md) — code conventions

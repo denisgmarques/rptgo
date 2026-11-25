@@ -8,32 +8,41 @@
 
 | Item | Value |
 |---|---|
-| Runtime | Native Go binary (`go build -o rptgo ./cmd/rptgo`) |
-| Package manager | Go modules, module `rptgo`; no `go.sum`, no external deps |
-| Lint / format config | None |
-| CI / Makefile | None |
+| Runtime | Native Go binary (CLI), `go build -o rptgo ./cmd/rptgo` |
+| Package manager | Go modules (`go.mod`, module `rptgo`, no `go.sum`) |
 
 - **Language**: Go 1.25 (`go.mod`)
-- **Framework**: No primary framework (standard library only: `bufio`, `bytes`, `encoding/csv`, `encoding/json`, `fmt`, `io`, `math`, `os`, `regexp`, `runtime`, `sort`, `strconv`, `strings`, `time`)
+- **Framework**: No primary framework (standard library only; 0 external dependencies)
+
+### Configuration (env vars, `internal/report`)
+
+| Var | Default | Use |
+|---|---|---|
+| `DATEFMT` | `DD/MM/YY` | date field order (`dates.go`) |
+| `CENTURY_CUTOFF` | 30 | 2-digit year: >= cutoff 19xx, below 20xx |
+| `TIMEFMT` | `HH:MM` | time format |
+| `WIDTH` | 80 | default page width (`parser.go`) |
+| `PAGELN` | 66 | default page length |
+| `SEPARATOR` | `\|` | field separator |
+| `RADIXSEP` | `.` | decimal separator in masks (`format.go`) |
+| `CURRSYM` | `$` | currency symbol in masks |
+| `RPT_NOW` | clock | fixed clock, `2006-01-02 15:04[:05]` or RFC3339 |
 
 ### Tests
 
 | Item | Value |
 |---|---|
-| Runner | Go `testing` (`go test ./...`) |
-| Assertions | Standard library only |
-| Mocks | None |
-| Coverage tool | None (`.gitignore` lists `coverage.txt`, `coverage.html`) |
-| Golden baselines | `internal/report/testdata/golden/`, regenerated with `-update` (`golden_test.go`) |
-| Benchmark | `BenchmarkConverte200k` (`bench_test.go`): 200k rows, B/op, allocs/op, `retido-B` |
-| Other suites | `examples_test.go`, `readme_test.go`, `cp850_test.go`, `saida_test.go`, `bool_test.go` |
+| Runner | Go stdlib `testing` (`go test ./...`) |
+| Assertions / mocks | None; stdlib only |
+| Golden files | `internal/report/testdata/golden`, update with `go test ./internal/report -run Golden -update` |
+| Benchmark | `BenchmarkConverte200k` (200k rows) |
+| Coverage / lint / CI | None configured |
 
 ### External integrations
 
-None. File, stdin and stdout only.
+None. Stdlib packages beyond core in `cmd/rptgo`: `encoding/base64`, `html`, `path/filepath`, `regexp`, `unicode/utf8`.
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — package layout
+- [`architecture.md`](architecture.md) — layout and layers
 - [`dependencies.md`](dependencies.md) — dependency inventory
-- [`coding_guidelines.md`](coding_guidelines.md) — code conventions

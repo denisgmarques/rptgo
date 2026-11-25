@@ -4,41 +4,36 @@
 
 ## AS IS — Current state
 
-No linter, formatter config, `.editorconfig` or pre-commit hook exists. Patterns below are observed in source, not tool-enforced.
+No linter, `.editorconfig` or pre-commit hook exists; patterns below are verified in source. Project rule `.claude/rules/bc-harness.md`: docs/specs in English.
 
-### 1. pt-BR identifiers, comments and messages
+### 1. Portuguese identifiers and messages
 
-- Functions, types and user-facing errors are Portuguese: `analisaArgs`, `leRegistros`, `NovoInterp`, `LinhasOrdenadas`, `"divisão por zero"` (`main.go`, `interp.go`, `value.go`).
-- Match the existing language when editing code; docs under `docs/` are English (`.claude/rules/bc-harness.md`).
+- Identifiers, comments, error messages use pt-BR (`executar`, `analisaArgs`, `Erro`, `NovoInterp`); README is pt-BR.
+- Keep new user-facing messages in pt-BR to match.
 
-### 2. Dynamic Value with type switches
+### 2. Stdlib only
 
-- `Value = any` holds nil, int64, float64, string, time.Time or bool (`value.go`); nil is null.
-- Evaluation and serializers switch on concrete types (`Interp.ev`, `valorTexto` in `csv.go`, `valorJSON` in `json.go`); unexpected types return an error.
-- AST nodes are plain structs with a marker method (`exprNode`, `stmtNode` in `ast.go`).
+- `go.mod` declares no requirements; features (CP850 table, template engine, CSV/JSON writers) are hand-written.
+- `json.go` builds objects by hand to preserve `input` column order and ISO dates.
 
-### 3. Single error type with line context
+### 3. Interpreter behind `internal/`
 
-- Errors come from `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`errors.go`); they append the source line and a `^` marker.
-- CLI prints `rptgo: <err>` to stderr and exits 1 (runtime) or 2 (bad args).
+- All language logic lives in `internal/report`; `cmd/rptgo` only calls exported `Tokenize`, `Parse`, `NovoInterp`, `Run`, `Paginas`, `LinhasOrdenadas`, `Agora`.
 
-### 4. Manual flag parsing, testable entrypoint
+### 4. Testable entry point
 
-- `executar(args, stdin, stdout, stderr) int` takes all I/O as parameters; `main` only calls `os.Exit` (`main.go`).
-- `analisaArgs` hand-parses flags (no `flag` package) to accept options and positionals in any order.
+- `main()` only calls `os.Exit(executar(args, stdin, stdout, stderr))`; tests inject streams.
 
-### 5. Deterministic tests via env and golden files
+### 5. Errors carry source context
 
-- Tests pin `RPT_NOW` and clear the 8 config vars with `t.Setenv` (`main_test.go`, `golden_test.go`).
-- Output baselines live in `internal/report/testdata/golden/`; regenerate with the `-update` flag.
-- Fixtures come from `examples/` (`examples_test.go`) and README snippets (`readme_test.go`).
+- `errors.go` attaches script line (`Erro`, `ErroLinhaDados`); HTML template errors report template line (`modelo, linha N`).
+- Exit codes: 1 runtime/script/data, 2 usage.
 
-### 6. Hand-built serialization to keep order
+### 6. Golden and example tests
 
-- `escreveJSON` assembles objects by hand to keep `input` column order and `YYYY-MM-DD` dates (`json.go` comment); `escreveCSV` uses `encoding/csv` (RFC 4180 quoting).
+- `internal/report/testdata/golden` baselines; `examples_test.go` runs `examples/`; `readme_test.go` checks README.
 
 ## Related documents
 
 - [`architecture.md`](architecture.md) — layers these patterns apply to
-- [`tech_stack.md`](tech_stack.md) — test tooling
-- [`domain_rules.md`](domain_rules.md) — semantics behind the code
+- [`tech_stack.md`](tech_stack.md) — tests and tooling

@@ -6,110 +6,59 @@
 
 ### Overview
 
-- Script (`.rp`) = `input` columns, optional `width`/`length`/margins/`separator`/`sort`, event sections, final `end` (`parser.go`).
-- Event kinds: `before`, `after`, `header`, `footer`, `detail` (`eventos` map in `parser.go`). `before`/`after` target `report` or a sort-key name.
-- Statements: `print`, `skip`, `page`, `need`, `set`, `if/else`, `begin...end` (`ast.go`).
-- Values are dynamically typed; null is `nil`.
+- Script = `input` section (typed columns) + settings (`width`, `length`, `top`, `bottom`, `left`, `separator`) + `sort` + event sections (`header`, `footer`, `detail`, `before|after report`, `before|after <sortkey>`) (`ast.go` `Script`, `EventKey`).
+- Statements: `print` (`in col`, `using`, `centered`), `skip`, `page`, `need`, `set`, `if/then/else`, `begin/end` (`ast.go`).
+- Values are dynamic: nil, int64, float64, string, time.Time, bool (`value.go`).
 
-### Script defaults
+### Input typing
 
-| Setting | Default | Source |
-|---|---|---|
-| width | 80 (env `WIDTH`) | `parser.go` |
-| length | 66 (env `PAGELN`) | `parser.go` |
-| top/bottom/left margin | 2 / 2 / 2 | `parser.go` |
-| separator | `\|` (env `SEPARATOR`, or `separator` stmt) | `parser.go` |
+- Types: ints `numeric integer long int`; floats `float amount double real huge`; also `string date ldate time text bool` (`interp.go` `tiposInt`, `tiposFlt`, `ast.go`).
+- `string` trims trailing whitespace only; others trim both ends; empty = null.
+- Field count mismatch: error `phase error no arquivo de entrada` (`converte`).
+- Int columns parse via float and truncate.
 
-Script without `input` or without final `end` fails parse.
+### Bool normalization
 
-### Input conversion
+- Column `bool`: finite number (no `_`) -> `!= 0`; else first letter N/F false, Y/T true; anything else null (`value.go` `normalizaBool`).
+- `nan` -> false (starts with N); `inf` -> null; `1_0` -> not numeric.
+- Truthiness (`verdade`): nil, 0, "", false are false.
 
-`Interp.tipa` (`interp.go`):
+### Static type check
 
-| Column type | Result |
-|---|---|
-| `numeric`, `integer`, `long`, `int` | int64 (float parsed, truncated); empty = null |
-| `float`, `amount`, `double`, `real`, `huge` | float64; empty = null |
-| `bool` | see Bool columns |
-| `date`, `ldate` | time.Time via `ParseData`; empty = null |
-| `string` | right-trimmed, cut to declared length; other types (`text`) right-trimmed |
-
-- Record field count must equal column count, else "phase error" (`ErroLinhaDados`).
-- Empty line = record with 1 empty field (`leRegistros`), so it errors unless input has 1 column.
-- Header line dropped when `--header sim`, or `auto` and first field equals first column name (case-insensitive).
-- A trailing separator (1 extra empty field) is ignored.
-- Variable named like a column fails (`verificaEventos`); `before/after <name>` must match a sort name.
-
-### Bool columns
-
-- `normalizaBool` (`value.go`): numeric text 0 = false, other number = true; else first letter N/F = false, Y/T = true (case-insensitive); anything else = null.
-- Print without mask: `YES`/`NO`; null bool column prints `***` (`formata`, `printStmt`). With mask: 1/0.
-- Arithmetic and comparison convert bool to 1/0 (`comparar`, `aritm`).
-- CSV/JSON emit `true`/`false`.
-
-### Logical vs arithmetic typing
-
-`tipos.go`, run at end of `Parse`:
-
-| Expression | Type |
-|---|---|
-| `and`, `or`, `not`, comparisons, `is [not] null`, bool column | logical |
-| `+ - * /`, negation, other columns, constants, calls | arithmetic |
-| `set` variable, unknown name | unknown (accepted anywhere) |
-
-- `if` condition, `not` operand, `and`/`or` operands and `where` of aggregates must not be arithmetic; error text: "precisa ser uma expressão lógica ...".
-- Type of an expression is its last operation. Truth: nil, 0, 0.0, "", false are false (`verdade`).
+- `if`, `where` of `count(* where ...)`, and operands of `and/or/not` must be logical (`tipos.go`).
+- Logical: and/or/not, comparisons, `is [not] null`, bool columns. Arithmetic: `+ - * /`, negation. `set` variables untyped, accepted anywhere.
 
 ### Arithmetic and comparison
 
-- int op int stays int64; `/` and `%` between integers are integer ops; nil counts as 0 in int math.
-- Division or modulo by zero = error "divisão por zero".
-- Dates: date - date = days (int64); date ± N = date; other date ops error.
-- `string + string` concatenates.
-- `comparar`: nil replaced by neutral value of other side's type; string vs non-string compares as strings.
-- `is null` true for nil or "".
+- int op int stays int64; `/` is integer division (truncates); `%` modulo; division by zero -> error (`aritm`).
+- Dates: date - date = days; date +/- number = date; other date ops error.
+- Strings: `+` concatenates.
+- Compare: bool -> 0/1; nil replaced by neutral of other side's type; mixed string/non-string compared as strings (`comparar`).
 
-### Sort and break cascade
+### Aggregates and functions
 
-`Interp.ordena` / `Run` (`interp.go`):
+- `count total avg min max` only valid in `after <key>` and `after report`; optional `where` filter (`interp.go` `chama`).
+- Others: `dow` (0=Sunday), `mdy(date, 0|1|2)` = month/day/year, `index(i, a, b, ...)`; unknown name -> error.
 
-- Stable sort by each key; nil sorts first; `desc` flips.
-- On key change at level j: `after` for levels n-1..j (innermost first), then `before` for levels j..n-1 (outermost first), then `detail`.
-- `before report` fires on the first row; at end all `after` levels, then `after report`.
-- Without `before report`, `header` runs once before the first row.
-- Zero input rows = error "não há registros de entrada" (text mode).
-- Only named sort keys can host `before`/`after`.
+### Sort and control breaks
 
-### Aggregates
+- `executa`: sort rows, then for each row detect first changed key level; fire `after` for deeper levels (innermost first), `before` for new levels, then `detail`.
+- Final: `after` per level, then `after report`.
+- No `before report` -> `header` runs once before first row. No rows -> error `não há registros de entrada`.
+- Footer height measured by dry run first (`altRodape`).
 
-- `count`, `total`, `avg`, `min`, `max` only inside `after <key>` / `after report`, else error.
-- Scope: rows of the group (`after report` = all rows); optional `where`.
-- `count` counts rows incl. nulls; others skip nulls. `total` of all-int = int64, empty = 0; `avg` empty = 0; `min/max` empty = null.
-- Other functions: `dow` (0 = Sunday), `mdy(date, 0|1|2)` = month/day/year, `index(i, a, b, ...)`.
+### Dates
 
-### Pagination
+- `DATEFMT` fixes field order; 4-digit year literal used as-is; 2-digit year uses `CENTURY_CUTOFF` (`dates.go`).
+- ISO `YYYY-MM-DD` accepted under any `DATEFMT` not starting with year.
 
-- Body capacity = length - top - bottom - footer height (`Interp.cap`); footer height measured by dry run on first row.
-- Auto page break when body full; `page [no footer][no header]` forces; `need n` breaks if fewer than n lines remain.
-- Footer placed at page bottom; page number starts at 1; `header` runs on each new page.
-- Default pads pages with blank lines to `length`; `--form-feed` joins pages with `\f` and does not pad.
-- `print`: line trimmed right, clipped to width - left margin; `centered` centers in width; no `in col` = 1 space after previous item; `no newline` keeps buffer; multi-line `'Nr'` masks spill to following lines in the same column.
-- String column without `using` pads to declared length.
+### Input parsing
 
-### Masks and formats
-
-- `using` numeric masks (`FmtMascara`, `format.go`): `# & * + - $ ( ) , .` or printf `%ld`, `%7.2f`; rounding half up. `'N'`/`'Nr'` on strings wraps by word (`QuebraTexto`). Numeric mask on string prints blank. No mask: int plain, float 2 decimals.
-- Dates (`dates.go`): `DATEFMT` (default `DD/MM/YY`) gives field order; 2-digit year >= `CENTURY_CUTOFF` (30) = 19xx else 20xx; `YYYY-MM-DD` always accepted. `date` prints 2-digit year, `ldate` 4.
-- `TIMEFMT` default `HH:MM`; `RADIXSEP` default `.`; `CURRSYM` default `$` (first char used).
-- `RPT_NOW` (`2006-01-02 15:04[:05]` or RFC3339) fixes `today`/`hour`.
-
-### CSV/JSON projection
-
-- `LinhasOrdenadas` returns sorted rows; no events, variables or pagination run (`cmd/rptgo/csv.go`, `json.go`).
-- Extend: add a case in the `--format` switch in `main.go` and a serializer taking `(w, *Script, []Row)`.
+- `--header auto`: first line dropped when its first field equals first column name (case-insensitive); trailing empty field tolerated (`leRegistros`).
+- Extend: add a type to `tiposInt`/`tiposFlt` and the `tipa` switch; add a function in `chama` and the parser.
 
 ## Related documents
 
-- [`api_contracts.md`](api_contracts.md) — CLI flags and output formats
-- [`data_model.md`](data_model.md) — in-memory Row and Script structures
-- [`architecture.md`](architecture.md) — where each rule lives
+- [`api_contracts.md`](api_contracts.md) — CLI surface
+- [`architecture.md`](architecture.md) — where rules live
+- [`data_model.md`](data_model.md) — in-memory row model

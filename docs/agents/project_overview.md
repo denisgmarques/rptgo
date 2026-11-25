@@ -6,41 +6,39 @@
 
 ### Purpose
 
-`rptgo` is a Go CLI that interprets fixed-column report scripts (`.rp`) over delimited input data and emits a paginated text report, CSV, or JSON.
+Run RPT-style report scripts (`.rp`) over delimited text data and emit paginated text, CSV, JSON or HTML (`cmd/rptgo/main.go`, `internal/report/`).
 
 ### Business problem
 
-- Implements a declarative report language (`input`/`sort`/`before`/`after`/`detail` sections, `print ... in col N using 'mask'`) without the original product (README.md).
-- Without it: column-exact layouts, cascading control-break totals and per-page header/footer for continuous-form printers need hand-written code.
-- Independent implementation, built from public docs and input/output behavior tests (README.md).
+- Without it, legacy RPT report scripts have no runnable interpreter; `README.md` (pt-BR) presents rptgo as a Go reimplementation.
+- Control-break reports (sort, `before`/`after` sections, totals) need a fixed-width paginated layout: `interp.go` handles sort, cascading breaks, pagination.
 
 ### Consumers and integrations
 
 | System | Role |
 |---|---|
-| Shell / operator | Runs `rptgo [options] script.rp [input.txt \| -]` (`cmd/rptgo/main.go`) |
-| Files / stdin / stdout | Script, data and report I/O; `-o` writes a file |
-| Dot-matrix / form printers | Target of `--encoding cp850`, `--form-feed`, `--newline crlf` |
-| Downstream CSV/JSON tools | Consume `--format csv\|json` output (`cmd/rptgo/csv.go`, `json.go`) |
-| Environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
+| Shell / CLI user | Invokes `rptgo script.rp [data]`; data from file or stdin (`-`) |
+| stdout / `-o` file | Report output (text, csv, json, html) |
+| HTML template file | `--template`, `--var`, `--logo` (data URI) feed `cmd/rptgo/html.go` |
+| Env vars | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
 
 ### Macro flow
 
-1. `main` calls `executar` with args, stdin, stdout, stderr.
-2. `analisaArgs` parses flags; bad args exit 2.
-3. Read script file, decode per `--encoding`, `report.Tokenize` then `report.Parse` (includes static logical/arithmetic type check). `--check` stops here with exit 0.
-4. Read data (file or `-` stdin), decode, `leRegistros` splits lines by the script separator (default `|`) and drops a header line (`--header`).
-5. `report.NovoInterp` converts records to typed `Row`; wrong field count or bad value fails ("phase error").
-6. `--format text`: `Interp.Run` sorts, fires break/detail events, paginates. `csv`/`json`: `Interp.LinhasOrdenadas` + serializer, no event sections.
-7. Apply CRLF if requested, encode, write to stdout or `-o` file.
+1. `main()` calls `executar` — parse options (`analisaArgs`); `-h/--help` exits 0.
+2. Read script file, decode (`--encoding`), `report.Tokenize` then `report.Parse` (includes static logical/arithmetic type check).
+3. `--check`: print syntax OK, exit 0.
+4. Read data (file or stdin), decode, split rows by `SEPARATOR` (default `|`), drop header per `--header`.
+5. `report.NovoInterp` converts rows to typed values (`input` section).
+6. By `--format`: text `Interp.Run`; csv/json `Interp.LinhasOrdenadas` (no event sections); html `Interp.Paginas` + template.
+7. Optional `--box` line-drawing conversion; encode (utf-8/latin-1/cp850) and newline mode; write to stdout or `-o`.
 
 ### Out of scope
 
-- No HTTP/network API, no database (stdlib only, file/stdin/stdout).
-- `--format csv|json` ignores `width`/`length`/margins and all event sections (README.md).
+- No database or network I/O: input is a file or stdin only.
+- csv/json skip `header`/`detail`/`before`/`after` sections (comment in `main.go`).
 
 ## Related documents
 
 - [`architecture.md`](architecture.md) — layout and layers
 - [`domain_rules.md`](domain_rules.md) — language semantics
-- [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, output formats
+- [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, template placeholders

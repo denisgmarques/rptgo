@@ -4,60 +4,64 @@
 
 ## AS IS — Current state
 
-### Not applicable in this repository
+### HTTP endpoints
 
-No HTTP server, router, handler, OpenAPI/proto schema, queue consumer or network client exists: `go.mod` has no dependencies and no source imports `net/http`. The only external contract is the CLI below.
+No HTTP endpoints. Contract = CLI flags, exit codes, HTML template placeholders. Source: `cmd/rptgo/main.go`, `ajuda.go`, `html.go`.
 
-### CLI contract
+Usage: `rptgo [options] script.rp [data|-]`
+
+### CLI options
+
+| Option | Values | Notes |
+|---|---|---|
+| `-h`, `--help` | | help on stdout, exit 0 |
+| `-o`, `--saida`, `--output` | path | default stdout |
+| `--encoding` | `utf-8` `latin-1` `cp850` | case-insensitive, validated |
+| `--header` | `auto` `sim` `nao` | validated |
+| `--newline` | `auto` `lf` `crlf` | validated |
+| `--format` | `text` `csv` `json` `html` | |
+| `--form-feed` | | rejected (exit 2) with csv/json/html |
+| `--box` | | text or html only; not with `latin-1` |
+| `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines N` | | HTML-only; rejected with other formats; `--var` repeatable; `--logo` png/jpg/gif/svg/webp |
+| `--strict` | | lexer strict mode |
+| `--check`, `-r` | | syntax check only |
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | ok, `--help`, `--check` |
+| 1 | script, data, I/O or template error |
+| 2 | invalid usage/option values; no script (full help on stderr) |
+
+### Command example
 
 ```
-rptgo [options] script.rp [input.txt | -]
+rptgo --format json examples/payroll-by-department/report.rp examples/payroll-by-department/data.txt
 ```
 
-| Flag | Values | Default | Effect |
-|---|---|---|---|
-| `-o`, `--saida`, `--output` | file path | stdout | Write output to file |
-| `--encoding` | `utf-8`, `latin-1` (`latin1`, `iso-8859-1`), `cp850` | `utf-8` | Script, data and output; unknown value = utf-8; unmappable char = `?` |
-| `--header` | `auto`, `sim`, `nao` | `auto` | Skip first data line as header |
-| `--form-feed` | switch | off | Join pages with `\f`, no blank padding |
-| `--newline` | `auto`, `lf`, `crlf` | `auto` (crlf on windows) | Line ending |
-| `--format` | `text`, `csv`, `json` | `text` | Output format; other value = error |
-| `--strict` | switch | off | Multi-line `/* */` comments rejected |
-| `--check`, `-r` | switch | off | Syntax check only |
+Input row (`examples/payroll-by-department/data.txt`): `Engineering|Maria Santos|2018-03-12|yes|9200.00`
 
-- Input omitted or `-` = stdin.
-- Unknown `-x` option, missing flag value, or no script = exit 2. `--format csv|json` with `--form-feed` = exit 2 (`rptgo: --format csv não pode ser combinado com --form-feed`).
-- File, parse, data or runtime error = exit 1, message `rptgo: <msg>` on stderr.
-- Success = exit 0. `--check` prints `No syntax errors were found in the report script.`
-- Env config: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
-
-### Output formats
-
-- `text`: paginated fixed-column report.
-- `csv`: header row of `input` names, comma delimiter, RFC 4180 quoting, one row per record in `sort` order; null = empty; dates `YYYY-MM-DD`; numbers shortest decimal; bool `true`/`false`.
-- `json`: array, one object per line, keys in `input` order; null = `null`; empty input = `[]`.
-
-JSON from `--format json` on `internal/report/testdata/golden/misto.rp` + `misto.dat`:
+### JSON output (`json.go`)
 
 ```json
 [
-{"id":1,"nome":"Zeca","nasc":"1985-03-05","cadast":"2020-01-15","ativo":true,"saldo":150.5},
-{"id":12,"nome":"Lia","nasc":"1944-04-04","cadast":"2011-11-11","ativo":true,"saldo":2},
-{"id":11,"nome":"Kika","nasc":"1933-03-03","cadast":"2012-08-08","ativo":false,"saldo":1}
+{"dept":"Engineering","employee":"Maria Santos","hired":"2018-03-12","active":true,"salary":9200}
 ]
 ```
 
-CSV from `examples/relatorio-vendas-regiao` (README.md):
+- Keys in `input` order; dates `YYYY-MM-DD`; nulls `null`; empty result `[]`.
+- CSV: same rows, ISO dates, `true/false`, nulls empty.
 
-```
-regiao,vendedor,valor
-Leste,Diego Alves,450.25
-Leste,Fabio Neri,780
-Norte,Bruno Lima,980
-```
+### HTML template placeholders
+
+- `{{Name}}` HTML-escaped; `{{#Pages}} ... {{/Pages}}` repeats per page.
+- Global: `Title Script Date Time Columns PageCount Logo` plus `--var` names.
+- In page block: `PageNumber`, `Text`.
+- Reserved for `--var`: `Title Script Date Time Columns PageCount Logo PageNumber Text`.
+- Unknown variable or bad marker -> error `modelo, linha N: ...`, exit 1. Output always UTF-8. Example: `examples/invoice-html/template.html`.
 
 ## Related documents
 
-- [`project_overview.md`](project_overview.md) — consumers and flow
-- [`domain_rules.md`](domain_rules.md) — semantics behind outputs
-- [`data_model.md`](data_model.md) — in-memory structures
+- [`project_overview.md`](project_overview.md) — macro flow
+- [`domain_rules.md`](domain_rules.md) — script semantics

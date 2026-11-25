@@ -6,26 +6,9 @@
 
 ### Not applicable in this repository
 
-No persistence layer: no migrations directory, no ORM models, no schema files, no database driver in `go.mod` (no dependencies). Data enters via file or stdin and leaves via stdout or a file. In-memory structures only, below.
-
-### In-memory structures
-
-| Type | Definition | Notes |
-|---|---|---|
-| `Row` | `[]Value`, positional per `input` column (`interp.go`) | nil = null; name resolved by shared `Interp.colIdx` map (name to index) |
-| `Value` | `any`: nil, int64, float64, string, time.Time, bool (`value.go`) | Dynamic typing |
-| `InputCol` | `Name`, `Type`, `Len`, `HasLen` (`ast.go`) | Declared in `input` |
-| `SortKey` | `Name`, `Expr`, `Desc` | Name usable in `before`/`after` |
-| `EventKey` | `Kind`, `Target` | Key of `Script.Events` |
-| `Script` | Input, Width, Length, Top, Bottom, Left, Separator, Sort, Events, Variaveis | Result of `Parse` |
-| `Interp` | script, rows, `vars`, page buffers, aggregate rows, clock | Per-run state |
-
-### Cache
-
-No cache. `Interp.vars` holds `set` variables for one run; the whole input is read into memory (`io.ReadAll`) and all rows are retained; `BenchmarkConverte200k` measures this (200k rows).
+No persistence: no migrations directory, no ORM or schema files, no database driver in `go.mod` (0 requirements). Data enters as a delimited text file or stdin and leaves via stdout or `-o`. In-memory only: `Row` is a positional `[]Value` in `input` column order (nil = null), with one `Interp.colIdx` name-to-position map shared by all rows (`internal/report/interp.go`). Cache: none.
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — conversion and typing rules
-- [`architecture.md`](architecture.md) — where structures live
-- [`api_contracts.md`](api_contracts.md) — serialized output
+- [`domain_rules.md`](domain_rules.md) — value types and parsing
+- [`architecture.md`](architecture.md) — layers

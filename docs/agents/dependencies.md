@@ -6,27 +6,21 @@
 
 ### External services
 
-| Service | Purpose |
-|---|---|
-| None | No network, database or API calls in source |
+None. No network clients; `go.mod` has no requirements. I/O: local files, stdin, stdout.
 
 ### Internal libraries
 
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | Lexer, parser, interpreter, formatting (imported by `cmd/rptgo`) |
+| `rptgo/internal/report` | Interpreter: lexer, parser, type check, interpreter, formats, dates, env config |
 
 ### Shared infrastructure
 
-| Item | Use |
-|---|---|
-| Go toolchain 1.25 (`go.mod`) | Build and test; stdlib only, no `go.sum` |
-| Process environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
-| Filesystem / stdin / stdout | Script, data and report I/O |
-
-No queues, caches, CI or observability tooling.
+- No queues, caches or observability.
+- Environment variables read by `internal/report/config.go`: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- Stdlib beyond core in `cmd/rptgo`: `encoding/base64`, `html`, `path/filepath`, `regexp`, `unicode/utf8`.
 
 ## Related documents
 
 - [`tech_stack.md`](tech_stack.md) — runtime and tests
-- [`architecture.md`](architecture.md) — integration points
+- [`architecture.md`](architecture.md) — package layout

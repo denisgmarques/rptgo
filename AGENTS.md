@@ -4,122 +4,89 @@
 
 ## Sections
 
-1. [Build, Lint, Test and Coverage](#1-build-lint-test-and-coverage)
-2. [Code Style & Project Conventions](#2-code-style--project-conventions)
-3. [Agent Communication & Behavioral Guidelines](#3-agent-communication--behavioral-guidelines)
-4. [Setup, Troubleshooting and Tips](#4-setup-troubleshooting-and-tips)
-5. [References](#5-references)
-6. [Agent Documentation](#6-agent-documentation)
+- [1. Build, Lint, Test and Coverage](#1-build-lint-test-and-coverage)
+- [2. Code Style & Project Conventions](#2-code-style--project-conventions)
+- [3. Agent Communication & Behavioral Guidelines](#3-agent-communication--behavioral-guidelines)
+- [4. Setup, Troubleshooting and Tips](#4-setup-troubleshooting-and-tips)
+- [5. References](#5-references)
+- [6. Agent Documentation](#6-agent-documentation)
 
 ## 1. Build, Lint, Test and Coverage
 
 | Command | Purpose |
 |---|---|
-| `go build -o rptgo ./cmd/rptgo` | Build the CLI binary (README.md, "Primeiros passos") |
+| `go build -o rptgo ./cmd/rptgo` | Build CLI binary (README.md "Primeiros passos") |
 | `./rptgo [opções] script.rp [entrada.txt \| -] > relatorio.txt` | Run a report script (README.md) |
-| `./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt` | Run bundled example (README.md) |
-| `go test ./internal/report -run Golden -update` | Regenerate golden baselines (see `internal/report/golden_test.go`) |
+| `./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt` | Run bundled example |
+| `go test ./internal/report -run Golden -update` | Regenerate golden baselines (`internal/report/golden_test.go`) |
 
-- Lint: none configured. Coverage: none configured (`.gitignore` lists `coverage.txt`, `coverage.html`, `*.prof`).
-- Tests: Go `testing` package, stdlib assertions, no mocks. `go test ./...` and `go vet ./...` run them but are not documented in the repo.
-- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go` (200k rows).
-- No CI, no Makefile.
-
-Test locations:
-
-| Dir | Files |
-|---|---|
-| `cmd/rptgo/` | `main_test.go`, `saida_test.go`, `cp850_test.go`, `examples_test.go`, `readme_test.go` |
-| `internal/report/` | `interp_test.go`, `bool_test.go`, `golden_test.go`, `bench_test.go`, `gerador200k_test.go` |
-| `internal/report/testdata/golden/` | `*.rp`, `*.dat`, `*.txt`, `misto_formfeed.txt` baselines |
+- Test: no CI or Makefile target. Go convention `go test ./...` (stdlib `testing`, no mocks).
+- Lint: none configured.
+- Coverage: none configured.
+- Benchmark: `BenchmarkConverte200k` in `internal/report/bench_test.go`.
 
 ## 2. Code Style & Project Conventions
 
-- No linter or formatter config. Conventions below are observed, not tool-enforced.
-- Module `rptgo`, Go 1.25 (`go.mod`), stdlib only, no `go.sum`.
-- Identifiers and code comments in pt-BR (`analisaArgs`, `leRegistros`); match when editing.
-- Specs and docs in English (`.claude/rules/bc-harness.md`).
-- `cmd/rptgo/` = CLI wiring and I/O: `main.go`, `csv.go`, `json.go`, `cp850.go`.
-- `internal/report/` = interpreter; `internal/` visibility enforced by Go compiler.
-- One concern per file in `internal/report/`:
-
-| File | Concern |
-|---|---|
-| `lexer.go` | tokenizer |
-| `parser.go` | parser; runs static type check from `tipos.go` at end of `Parse` |
-| `ast.go` | node types |
-| `interp.go` | sort, cascading breaks, pagination |
-| `value.go` | typed values, bool, arithmetic |
-| `tipos.go` | static logical-vs-arithmetic check |
-| `format.go` | `using` masks |
-| `dates.go` | date parsing/formatting |
-| `errors.go` | source-line error context |
-| `config.go` | env config |
-
-- Full guide: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
+- Language: Go 1.25 (`go.mod`, module `rptgo`). No external deps, no `go.sum`.
+- Identifiers and code comments: pt-BR.
+- Docs and specs: English (`.claude/rules/bc-harness.md`).
+- `internal/report` holds the interpreter; compiler-enforced `internal`, importable only inside module `rptgo`.
+- `cmd/rptgo` holds CLI (package `main`): option parsing, writers, encodings.
+- Golden baselines live in `internal/report/testdata/golden/`.
+- Env config read via `os.LookupEnv`/`Getenv` in `internal/report`: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- `RPT_NOW` fixes the clock via `report.Agora`.
+- Exit codes: 2 usage errors, invalid option values, `--format csv|json|html` with `--form-feed`; 1 script/data/I-O errors.
+- Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
 
-- Write specs and docs in English; keep pt-BR only for verbatim identifiers, flag values, quoted messages (`.claude/rules/bc-harness.md`).
-- Use bc-harness workflows for changes (`.claude/rules/bc-harness.md`).
-- State plainly that no CI or linter exists when asked about checks.
+- Follow bc-harness workflows (`.claude/rules/bc-harness.md`).
+- Write docs and specs in English; keep pt-BR only for identifiers, flag values, quoted messages.
+- Ground claims in repo files; run `go test ./...` after code changes.
 
 ### Never in this repository
 
-- Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); they are overwritten on re-run (`.claude/rules/bc-harness.md`).
-- Never import `rptgo/internal/report` from outside module `rptgo`; the Go compiler rejects it.
-- Never combine `--format csv|json` with `--form-feed`; the CLI exits with code 2.
+- Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); `.claude/rules/bc-harness.md` forbids it.
+- Never add external dependencies; module has none.
 
 ## 4. Setup, Troubleshooting and Tips
 
-Prereq: Go 1.25 toolchain. No external dependencies.
+- Prereq: Go 1.25.
 
 ```sh
 go build -o rptgo ./cmd/rptgo
+./rptgo --help
 ./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
 ```
 
-Flags (`cmd/rptgo/main.go`):
-
-| Flag | Values |
-|---|---|
-| `-o` / `--saida` / `--output` | output file |
-| `--encoding` | `utf-8`, `latin-1`, `cp850` |
-| `--header` | `auto`, `sim`, `nao` |
-| `--form-feed` | text format only |
-| `--newline` | `auto`, `lf`, `crlf` |
-| `--format` | `text`, `csv`, `json` |
-| `--strict` | strict parsing (block comments on one line) |
-| `--check` / `-r` | syntax check |
-
-Env vars (`internal/report/config.go`, `dates.go`): `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` (pins the clock for reproducible runs).
+- CLI options: `-h/--help`, `-o/--saida/--output`, `--encoding utf-8|latin-1|cp850`, `--header auto|sim|nao`, `--form-feed`, `--newline auto|lf|crlf`, `--format text|csv|json|html`, `--box`, `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines`, `--strict`, `--check/-r`.
 
 | Symptom | Check |
 |---|---|
-| Exit code 2 | `--format csv\|json` combined with `--form-feed` |
-| Multi-line `/* */` comment rejected | `--strict` requires open and close on same line |
-| Golden test fails after intended output change | rerun `go test ./internal/report -run Golden -update`, review diff |
-| Time/date output differs between runs | set `RPT_NOW` |
+| Exit code 2 | Usage error, invalid option value, or `--form-feed` with `--format csv\|json\|html` |
+| Exit code 1 | Script, data or I/O error; read source-line context in message |
+| Non-deterministic dates in output | Set `RPT_NOW` |
+| Golden test fails after intended change | Run golden update command from section 1 |
 
 ## 5. References
 
 | Doc | Purpose |
 |---|---|
-| `README.md` | Usage, flags, getting started, script language, structure (pt-BR) |
-| `.claude/rules/bc-harness.md` | Project rules: bc-harness workflow, English docs |
-| `examples/` | `relatorio-vendas-regiao/`, `relatorio-estoque-categoria/` (`relatorio.rp` + `dados.txt`) |
+| [README.md](README.md) | User docs (pt-BR): usage, language, examples |
+| [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
+| [examples/](examples) | 7 examples, each with `.rp` script and data file |
 
 ## 6. Agent Documentation
 
 | File | Content |
 |---|---|
-| `docs/agents/project_overview.md` | What `rptgo` is, scope, non-goals |
-| `docs/agents/architecture.md` | `cmd/rptgo` CLI vs `internal/report` pipeline |
-| `docs/agents/tech_stack.md` | Go 1.25, stdlib-only, no framework or container |
-| `docs/agents/coding_guidelines.md` | Naming, per-file responsibilities, lint/test status |
-| `docs/agents/domain_rules.md` | `.rp` language semantics: breaks, `using` masks, column types |
-| `docs/agents/api_contracts.md` | CLI flags and exit-code contract; no HTTP API |
-| `docs/agents/data_model.md` | Input record model, column types, `Value` type |
-| `docs/agents/dependencies.md` | Dependency inventory: none |
+| [docs/agents/project_overview.md](docs/agents/project_overview.md) | Project purpose and scope |
+| [docs/agents/architecture.md](docs/agents/architecture.md) | CLI and interpreter structure, data flow |
+| [docs/agents/tech_stack.md](docs/agents/tech_stack.md) | Go version, tooling, runtime |
+| [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md) | Code style and conventions |
+| [docs/agents/api_contracts.md](docs/agents/api_contracts.md) | CLI flags, exit codes, `.rp` language contract |
+| [docs/agents/data_model.md](docs/agents/data_model.md) | Values, records, formats |
+| [docs/agents/dependencies.md](docs/agents/dependencies.md) | Dependencies (none external) |
+| [docs/agents/domain_rules.md](docs/agents/domain_rules.md) | Sorting, breaks, accumulators, pagination, masks |
 
 _End of AGENTS.md_
