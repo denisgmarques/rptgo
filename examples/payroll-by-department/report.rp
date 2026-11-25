@@ -9,7 +9,7 @@ input
 
 width 72
 length 40
-sort <dept> dept
+sort dept
 
 before report
    print 'PAYROLL BY DEPARTMENT' centered

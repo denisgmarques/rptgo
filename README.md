@@ -257,6 +257,11 @@ end
   disparam em cascata: ao mudar uma chave, os níveis mais internos fecham primeiro
   (`after` em ordem do mais específico pro mais geral), depois os novos níveis abrem
   (`before` em ordem do mais geral pro mais específico).
+- **Níveis de quebra:** cada chave do `sort` é um nível, e o nome é o da coluna:
+  `sort depto, nome` já permite `before depto`/`after depto` e `before nome`/`after nome`. Só
+  uma chave calculada precisa de nome explícito, entre `<>`, antes da expressão:
+  `sort <periodo> (mdy(data,2) * 100 + mdy(data,0)), loja` e depois `before periodo`. Depois da
+  chave pode vir `desc`.
 - **Comandos:** `print` (com `in col N`, `using 'máscara'`, `centered`, `no newline`),
   `skip [n]`, `page [, no footer][, no header]`, `need n`, `set var to expr`,
   `if expr then ... else ...`, `begin ... end`.

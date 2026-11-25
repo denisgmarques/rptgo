@@ -3,6 +3,7 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,7 +54,7 @@ func TestLinhasOrdenadasSemEventos(t *testing.T) {
   g [string 3],
   h [numeric],
   v [numeric]
-sort <g> g, <h> h desc
+sort g, h desc
 before g
   set tocou to 1
 after g
@@ -100,5 +101,61 @@ end
 	}
 	if it.pageno != 0 {
 		t.Errorf("pageno = %d, esperado 0", it.pageno)
+	}
+}
+
+// Chave de sort com nome explícito: necessária quando a chave é uma expressão calculada
+// (no exemplo, ano*100+mês); para colunas simples o nome é herdado ("sort g, h").
+func TestSortChaveCalculadaComNome(t *testing.T) {
+	const script = `input
+  d    [date],
+  nome [string 5]
+sort <periodo> (mdy(d,2) * 100 + mdy(d,0)), nome
+before periodo
+  print 'inicio'
+detail
+  print nome
+after periodo
+  print 'fim', count(*)
+end
+`
+	got, err := rodar(t, script, []string{"2026-01-15|a", "2026-02-03|b", "2026-01-20|c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"inicio", "a", "c", "fim 2", "inicio", "b", "fim 1"}
+	if len(got) != len(want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	for i := range want {
+		if strings.Join(strings.Fields(got[i]), " ") != want[i] {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	}
+}
+
+// O nome herdado da coluna vale para before/after sem declarar <nome>.
+func TestSortNomeHerdadoDaColuna(t *testing.T) {
+	const script = `input
+  g [string 3],
+  v [numeric]
+sort g
+before g
+  print 'abre'
+detail
+  print v
+after g
+  print 'fecha', total(v)
+end
+`
+	got, err := rodar(t, script, []string{"b|1", "a|2", "b|3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"abre", "2", "fecha 2", "abre", "1", "3", "fecha 4"}
+	for i := range want {
+		if i >= len(got) || strings.Join(strings.Fields(got[i]), " ") != want[i] {
+			t.Fatalf("got %q, want %q", got, want)
+		}
 	}
 }

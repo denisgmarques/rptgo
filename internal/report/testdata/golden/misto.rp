@@ -9,7 +9,7 @@ input
 
 width 70
 length 12
-sort <n> nome desc
+sort nome desc
 
 before report
    print 'MISTO' centered
@@ -25,7 +25,7 @@ detail
    print id in col 1, nome in col 6, nasc in col 20, cadast in col 30, ativo in col 42
    if saldo > 100 and ativo then print 'alto' in col 50 else print 'baixo' in col 50
 
-after n
+after nome
    print 'saldo:' in col 1, total(saldo) in col 10 using '###,##&.&&'
 
 after report

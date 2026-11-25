@@ -180,7 +180,7 @@ func TestExecutarFormatoOrdemESort(t *testing.T) {
 width 20
 length 8
 top margin 3
-sort <g> g desc, <n> n
+sort g desc, n
 before report
   print 'CABECALHO-RELATORIO'
 header

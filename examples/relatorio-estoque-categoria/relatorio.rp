@@ -9,26 +9,26 @@ input
 
 width 72
 length 60
-sort <cat> categoria, <sub> subcategoria
+sort categoria, subcategoria
 
 before report
    print 'ESTOQUE POR CATEGORIA' centered
    skip
 
-before cat
+before categoria
    print 'Categoria: ' + categoria in col 1
 
-before sub
+before subcategoria
    print 'Subcategoria: ' + subcategoria in col 3
 
 detail
    print produto in col 5, quantidade in col 24 using '#####&', preco in col 32 using '###,##&.&&', quantidade * preco in col 46 using '#,###,##&.&&'
 
-after sub
+after subcategoria
    print 'Produtos:' in col 5, count(*) in col 24 using '#####&', 'Valor:' in col 32, total(quantidade * preco) in col 46 using '#,###,##&.&&'
    print 'Preco medio:' in col 5, avg(preco) in col 32 using '###,##&.&&'
 
-after cat
+after categoria
    print 'Itens na categoria:' in col 3, count(*) in col 24 using '#####&', total(quantidade * preco) in col 46 using '#,###,##&.&&'
    skip
 

@@ -38,14 +38,23 @@ func TestExemploEstoqueCategoria(t *testing.T) {
 	if sort == nil {
 		t.Fatal("script sem sort")
 	}
-	nomes := regexp.MustCompile(`<(\w+)>`).FindAllStringSubmatch(sort[1], -1)
+	// chaves do sort separadas por vírgula; o nome é o da coluna (ou o <nome> explícito)
+	var nomes []string
+	for _, chave := range strings.Split(sort[1], ",") {
+		chave = strings.TrimSpace(chave)
+		if m := regexp.MustCompile(`^<(\w+)>`).FindStringSubmatch(chave); m != nil {
+			nomes = append(nomes, m[1])
+		} else {
+			nomes = append(nomes, strings.Fields(chave)[0])
+		}
+	}
 	if len(nomes) < 2 {
 		t.Fatalf("esperados 2+ nomes no sort, vieram %d", len(nomes))
 	}
 	for _, n := range nomes {
 		for _, ev := range []string{"before ", "after "} {
-			if !regexp.MustCompile(`(?m)^` + ev + n[1] + `$`).MatchString(src) {
-				t.Errorf("sem seção '%s%s'", ev, n[1])
+			if !regexp.MustCompile(`(?m)^` + ev + n + `$`).MatchString(src) {
+				t.Errorf("sem seção '%s%s'", ev, n)
 			}
 		}
 	}

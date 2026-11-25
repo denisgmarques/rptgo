@@ -11,16 +11,16 @@ input
 
 width 76
 length 50
-sort <cust> customer, <ord> order_no
+sort customer, order_no
 
 before report
    print 'PURCHASE ORDERS' centered
    skip
 
-before cust
+before customer
    print 'Customer: ' + customer in col 1
 
-before ord
+before order_no
    print 'Order ' + order_no in col 3
    print 'SKU' in col 5, 'Qty' in col 18, 'Price' in col 28, 'Total' in col 40
 
@@ -28,13 +28,13 @@ detail
    print sku in col 5, quantity in col 16 using '#####&', unit_price in col 26 using '###,##&.&&', quantity * unit_price in col 38 using '###,##&.&&' no newline
    if quantity >= 100 then print 'BULK' in col 52 else print ''
 
-after ord
+after order_no
    print 'Subtotal:' in col 5, total(quantity * unit_price) in col 38 using '###,##&.&&'
    if total(quantity * unit_price) < 500 then print 'Shipping:' in col 5, 25.00 in col 38 using '###,##&.&&'
    if count(* where rush) > 0 then print 'RUSH ORDER' in col 5
    skip
 
-after cust
+after customer
    print 'Customer total:' in col 3, total(quantity * unit_price) in col 38 using '###,##&.&&'
    print 'Lines:' in col 3, count(*) in col 38 using '#####&'
    skip
