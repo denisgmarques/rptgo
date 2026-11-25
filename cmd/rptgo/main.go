@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -19,15 +20,16 @@ import (
 )
 
 type opcoes struct {
-	script    string
-	entrada   string
-	saida     string
-	encoding  string
-	header    string // auto | sim | nao
-	formFeed  bool
-	newline   string // auto | lf | crlf
-	strict    bool
-	check     bool
+	script   string
+	entrada  string
+	saida    string
+	encoding string
+	header   string // auto | sim | nao
+	formFeed bool
+	newline  string // auto | lf | crlf
+	strict   bool
+	check    bool
+	formato  string // text | csv | json
 }
 
 func main() {
@@ -97,10 +99,26 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		fmt.Fprintln(erroPadrao, "rptgo:", err)
 		return 1
 	}
-	texto, err := it.Run()
-	if err != nil {
-		fmt.Fprintln(erroPadrao, "rptgo:", err)
-		return 1
+	var texto string
+	switch op.formato {
+	case "csv", "json":
+		// CSV/JSON não executam nenhuma seção de evento: só 'input' e 'sort' contam.
+		var buf bytes.Buffer
+		escreve := escreveCSV
+		if op.formato == "json" {
+			escreve = escreveJSON
+		}
+		if err := escreve(&buf, script, it.LinhasOrdenadas()); err != nil {
+			fmt.Fprintln(erroPadrao, "rptgo:", err)
+			return 1
+		}
+		texto = buf.String()
+	default:
+		texto, err = it.Run()
+		if err != nil {
+			fmt.Fprintln(erroPadrao, "rptgo:", err)
+			return 1
+		}
 	}
 
 	crlf := op.newline == "crlf" || (op.newline == "auto" && runtime.GOOS == "windows")
@@ -116,12 +134,17 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 	return 0
 }
 
-// decodificar/codificar dão suporte básico a --encoding: utf-8 (padrão, usado ao pé da
-// letra) e latin-1/iso-8859-1 (mapeamento direto byte<->rune, sem tabela). Outras páginas de
-// código (ex.: cp850, comum em impressoras matriciais) ainda não têm tabela própria aqui -
-// nesse caso os bytes são tratados como utf-8, o melhor possível sem uma tabela dedicada.
+// decodificar/codificar dão suporte a --encoding: utf-8 (padrão, usado ao pé da letra),
+// latin-1/iso-8859-1 (mapeamento direto byte<->rune) e cp850 (tabela em cp850.go, comum em
+// impressoras matriciais). Qualquer outro valor é tratado como utf-8.
 func decodificar(b []byte, enc string) string {
 	switch strings.ToLower(enc) {
+	case "cp850":
+		r := make([]rune, len(b))
+		for i, c := range b {
+			r[i] = cp850ParaRune[c]
+		}
+		return string(r)
 	case "latin-1", "latin1", "iso-8859-1", "iso8859-1":
 		r := make([]rune, len(b))
 		for i, c := range b {
@@ -135,6 +158,16 @@ func decodificar(b []byte, enc string) string {
 
 func codificar(s string, enc string) []byte {
 	switch strings.ToLower(enc) {
+	case "cp850":
+		b := make([]byte, 0, len(s))
+		for _, r := range s {
+			c, ok := cp850ParaByte[r]
+			if !ok {
+				c = '?'
+			}
+			b = append(b, c)
+		}
+		return b
 	case "latin-1", "latin1", "iso-8859-1", "iso8859-1":
 		b := make([]byte, 0, len(s))
 		for _, r := range s {
@@ -171,7 +204,7 @@ func escreveArquivo(caminho string, texto []byte, erroPadrao io.Writer) int {
 // analisaArgs faz um parsing manual simples (em vez do pacote flag) pra aceitar opções e
 // posicionais misturados em qualquer ordem.
 func analisaArgs(args []string) (opcoes, []string, error) {
-	op := opcoes{encoding: "utf-8", header: "auto", newline: "auto"}
+	op := opcoes{encoding: "utf-8", header: "auto", newline: "auto", formato: "text"}
 	var pos []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -209,6 +242,15 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 				return op, nil, err
 			}
 			op.newline = v
+		case "--format":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if v != "text" && v != "csv" && v != "json" {
+				return op, nil, fmt.Errorf("valor inválido para --format: %s (use text, csv ou json)", v)
+			}
+			op.formato = v
 		case "--strict":
 			op.strict = true
 		case "--check", "-r":
@@ -219,6 +261,9 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			}
 			pos = append(pos, a)
 		}
+	}
+	if op.formato != "text" && op.formFeed {
+		return op, nil, fmt.Errorf("--format %s não pode ser combinado com --form-feed", op.formato)
 	}
 	return op, pos, nil
 }

@@ -8,8 +8,10 @@ import (
 	"time"
 )
 
-// Row é um registro de entrada já convertido: nome da coluna -> valor (nil representa nulo).
-type Row = map[string]Value
+// Row é um registro de entrada já convertido: os valores na mesma ordem das colunas do
+// 'input' (nil representa nulo). O nome da coluna é resolvido por Interp.colIdx, um único
+// mapa nome->posição compartilhado por todos os registros da execução.
+type Row = []Value
 
 var tiposInt = map[string]bool{"numeric": true, "integer": true, "long": true, "int": true}
 var tiposFlt = map[string]bool{"float": true, "amount": true, "double": true, "real": true, "huge": true}
@@ -27,6 +29,7 @@ type Interp struct {
 	preenche bool
 
 	vars    map[string]Value
+	colIdx  map[string]int
 	row     Row
 	pageno  int
 	aggRows []Row
@@ -53,8 +56,12 @@ func NovoInterp(s *Script, linhas [][]string, formFeed bool) (*Interp, error) {
 		FormFeed: formFeed,
 		preenche: !formFeed,
 		vars:     map[string]Value{},
+		colIdx:   make(map[string]int, len(s.Input)),
 		fimCol:   1,
 		agora:    agora(),
+	}
+	for j, c := range s.Input {
+		it.colIdx[c.Name] = j
 	}
 	rows, err := it.converte(linhas)
 	if err != nil {
@@ -78,13 +85,13 @@ func (it *Interp) converte(linhas [][]string) ([]Row, error) {
 			return nil, ErroLinhaDados(ln, "phase error no arquivo de entrada: registro %d tem %d campos, esperados %d",
 				ln, len(campos), len(cols))
 		}
-		r := Row{}
+		r := make(Row, len(cols))
 		for j, col := range cols {
 			v, err := it.tipa(campos[j], col, ln)
 			if err != nil {
 				return nil, err
 			}
-			r[col.Name] = v
+			r[j] = v
 		}
 		out = append(out, r)
 	}
@@ -175,8 +182,8 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		if it.S.Variaveis[x.Name] {
 			return nil, nil
 		}
-		if v, ok := it.row[x.Name]; ok {
-			return v, nil
+		if j, ok := it.colIdx[x.Name]; ok && j < len(it.row) {
+			return it.row[j], nil
 		}
 		return nil, Erro("nome desconhecido: '%s'", x.Name)
 	case TodayExpr:
@@ -701,6 +708,14 @@ func (it *Interp) chave(r Row) []Value {
 	}
 	it.row = salvo
 	return ks
+}
+
+// LinhasOrdenadas devolve os registros na ordem da cláusula 'sort', sem executar nenhuma
+// seção de evento (before/after/header/footer/detail), sem tocar em variáveis nem em
+// paginação. É a base das saídas CSV/JSON, que só consultam 'input' e 'sort'.
+func (it *Interp) LinhasOrdenadas() []Row {
+	it.ordena()
+	return it.rows
 }
 
 func (it *Interp) ordena() {

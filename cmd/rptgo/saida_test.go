@@ -1,0 +1,244 @@
+package main
+
+import (
+	"bytes"
+	"encoding/csv"
+	"encoding/json"
+	"regexp"
+	"strings"
+	"testing"
+
+	"rptgo/internal/report"
+)
+
+// preparar converte um script e dados separados por '|' em Script e linhas já ordenadas.
+func preparar(t *testing.T, script string, dados []string) (*report.Script, []report.Row) {
+	t.Helper()
+	toks, err := report.Tokenize(script, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := report.Parse(toks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	regs := make([][]string, len(dados))
+	for i, d := range dados {
+		regs[i] = strings.Split(d, "|")
+	}
+	it, err := report.NovoInterp(s, regs, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, it.LinhasOrdenadas()
+}
+
+const scriptTipos = `input
+  z      [string 20],
+  a      [numeric],
+  m      [float],
+  nasc   [date 8],
+  cad    [ldate 10],
+  ok     [bool]
+detail
+  print z
+end
+`
+
+var dadosTipos = []string{
+	"um|1|1.5|05/03/85|2020-01-15|yes",
+	"dois||2|31/12/29|2019-12-31|no",
+	"tres|3||||xxx",
+}
+
+var reISO = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+func TestEscreveCSVHeaderEContagem(t *testing.T) {
+	s, rows := preparar(t, scriptTipos, dadosTipos)
+	var buf bytes.Buffer
+	if err := escreveCSV(&buf, s, rows); err != nil {
+		t.Fatal(err)
+	}
+	linhas := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(linhas) != len(dadosTipos)+1 {
+		t.Fatalf("esperadas %d linhas, vieram %d:\n%s", len(dadosTipos)+1, len(linhas), buf.String())
+	}
+	if linhas[0] != "z,a,m,nasc,cad,ok" {
+		t.Errorf("cabeçalho = %q", linhas[0])
+	}
+	if linhas[3] != "tres,3,,,," {
+		t.Errorf("linha com nulos: %q", linhas[3])
+	}
+}
+
+func TestEscreveCSVQuoting(t *testing.T) {
+	const script = "input\n  a [string 30],\n  b [string 30]\ndetail\n  print a\nend\n"
+	s, _ := preparar(t, script, []string{"x|y"})
+	rows := []report.Row{
+		{"com,virgula", `com "aspas"`},
+		{"linha1\nlinha2", "simples"},
+		{"", "fim"},
+	}
+	var buf bytes.Buffer
+	if err := escreveCSV(&buf, s, rows); err != nil {
+		t.Fatal(err)
+	}
+	want := "a,b\n\"com,virgula\",\"com \"\"aspas\"\"\"\n\"linha1\nlinha2\",simples\n,fim\n"
+	if buf.String() != want {
+		t.Errorf("got %q, want %q", buf.String(), want)
+	}
+	lido, err := csv.NewReader(&buf).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lido) != 4 || lido[1][0] != "com,virgula" || lido[1][1] != `com "aspas"` || lido[2][0] != "linha1\nlinha2" {
+		t.Errorf("round-trip pelo encoding/csv falhou: %q", lido)
+	}
+}
+
+func TestEscreveCSVDatasISO(t *testing.T) {
+	// DATEFMT e CENTURY_CUTOFF diferentes do padrão não podem afetar a saída ISO.
+	t.Setenv("DATEFMT", "MM/DD/YY")
+	t.Setenv("CENTURY_CUTOFF", "50")
+	s, rows := preparar(t, scriptTipos, []string{"um|1|1.5|03/05/85|2020-01-15|yes", "dois|2|2|12/31/29|12/31/2019|no"})
+	var buf bytes.Buffer
+	if err := escreveCSV(&buf, s, rows); err != nil {
+		t.Fatal(err)
+	}
+	lido, err := csv.NewReader(&buf).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range lido[1:] {
+		for _, idx := range []int{3, 4} { // nasc (date) e cad (ldate)
+			if !reISO.MatchString(r[idx]) {
+				t.Errorf("registro %d, coluna %s: %q não é AAAA-MM-DD", i+1, lido[0][idx], r[idx])
+			}
+		}
+	}
+	if lido[1][3] != "1985-03-05" || lido[1][4] != "2020-01-15" || lido[2][3] != "2029-12-31" {
+		t.Errorf("datas inesperadas: %v / %v", lido[1], lido[2])
+	}
+}
+
+func TestEscreveCSVTiposEIgnoraLayout(t *testing.T) {
+	s1, r1 := preparar(t, scriptTipos, dadosTipos)
+	s2, r2 := preparar(t, strings.Replace(scriptTipos, "input\n", "width 40\nlength 10\ntop margin 5\ninput\n", 1), dadosTipos)
+	var a, b bytes.Buffer
+	if err := escreveCSV(&a, s1, r1); err != nil {
+		t.Fatal(err)
+	}
+	if err := escreveCSV(&b, s2, r2); err != nil {
+		t.Fatal(err)
+	}
+	if a.String() != b.String() {
+		t.Errorf("layout alterou o CSV:\n%s\n---\n%s", a.String(), b.String())
+	}
+	lido, _ := csv.NewReader(&a).ReadAll()
+	if got := strings.Join(lido[1], ","); got != "um,1,1.5,1985-03-05,2020-01-15,true" {
+		t.Errorf("linha 1 = %q", got)
+	}
+	if got := strings.Join(lido[2], ","); got != "dois,,2,2029-12-31,2019-12-31,false" {
+		t.Errorf("linha 2 = %q", got)
+	}
+	if got := strings.Join(lido[3], ","); got != "tres,3,,,," {
+		t.Errorf("linha 3 = %q", got)
+	}
+}
+
+func TestEscreveJSONEstrutura(t *testing.T) {
+	s, rows := preparar(t, scriptTipos, dadosTipos)
+	var buf bytes.Buffer
+	if err := escreveJSON(&buf, s, rows); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(buf.Bytes()) {
+		t.Fatalf("JSON inválido:\n%s", buf.String())
+	}
+	var objs []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &objs); err != nil {
+		t.Fatal(err)
+	}
+	if len(objs) != len(dadosTipos) {
+		t.Fatalf("esperados %d objetos, vieram %d", len(dadosTipos), len(objs))
+	}
+	for i, o := range objs {
+		if len(o) != 6 {
+			t.Errorf("objeto %d: %d chaves, esperadas 6: %v", i, len(o), o)
+		}
+		for _, k := range []string{"z", "a", "m", "nasc", "cad", "ok"} {
+			if _, ok := o[k]; !ok {
+				t.Errorf("objeto %d sem a chave %q", i, k)
+			}
+		}
+	}
+	// A ordem das chaves segue o 'input' (z, a, m...), não a ordem alfabética.
+	linha := strings.Split(buf.String(), "\n")[1]
+	ordem := []string{`"z":`, `"a":`, `"m":`, `"nasc":`, `"cad":`, `"ok":`}
+	ult := -1
+	for _, k := range ordem {
+		p := strings.Index(linha, k)
+		if p <= ult {
+			t.Errorf("chave %s fora da ordem declarada em %s", k, linha)
+		}
+		ult = p
+	}
+}
+
+func TestEscreveJSONTipos(t *testing.T) {
+	t.Setenv("DATEFMT", "MM/DD/YY")
+	t.Setenv("CENTURY_CUTOFF", "50")
+	s, rows := preparar(t, scriptTipos, []string{
+		"um|1|1.5|03/05/85|2020-01-15|yes",
+		"dois||2|12/31/29|12/31/2019|no",
+		"tres|3||||xxx",
+	})
+	var buf bytes.Buffer
+	if err := escreveJSON(&buf, s, rows); err != nil {
+		t.Fatal(err)
+	}
+	cru := buf.String()
+	// datas: string AAAA-MM-DD no JSON cru (nada de RFC 3339 com hora)
+	if strings.Contains(cru, "T00:00") {
+		t.Errorf("data com componente de hora: %s", cru)
+	}
+	for _, trecho := range []string{`"nasc":"1985-03-05"`, `"cad":"2020-01-15"`, `"nasc":"2029-12-31"`, `"cad":"2019-12-31"`} {
+		if !strings.Contains(cru, trecho) {
+			t.Errorf("faltou %s em %s", trecho, cru)
+		}
+	}
+	var objs []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &objs); err != nil {
+		t.Fatal(err)
+	}
+	if objs[0]["a"] != float64(1) || objs[0]["m"] != 1.5 || objs[0]["ok"] != true || objs[1]["ok"] != false {
+		t.Errorf("tipos do primeiro/segundo objeto: %v / %v", objs[0], objs[1])
+	}
+	if _, ok := objs[0]["nasc"].(string); !ok || !reISO.MatchString(objs[0]["nasc"].(string)) {
+		t.Errorf("nasc = %v", objs[0]["nasc"])
+	}
+	// nulos: a (2º), m, nasc, cad e ok (3º, valor inválido de bool) viram null
+	if objs[1]["a"] != nil || objs[2]["m"] != nil || objs[2]["nasc"] != nil || objs[2]["cad"] != nil || objs[2]["ok"] != nil {
+		t.Errorf("nulos esperados: %v / %v", objs[1], objs[2])
+	}
+	if !strings.Contains(cru, `"a":null`) {
+		t.Errorf("faltou \"a\":null em %s", cru)
+	}
+}
+
+func TestEscreveJSONEscapeEVazio(t *testing.T) {
+	const script = "input\n  a [string 30]\ndetail\n  print a\nend\n"
+	s, _ := preparar(t, script, []string{"x"})
+	var buf bytes.Buffer
+	if err := escreveJSON(&buf, s, []report.Row{{"aspas \" e \\ e\nquebra"}}); err != nil {
+		t.Fatal(err)
+	}
+	var objs []map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &objs); err != nil || objs[0]["a"] != "aspas \" e \\ e\nquebra" {
+		t.Errorf("escape falhou: %v %v", objs, err)
+	}
+	buf.Reset()
+	if err := escreveJSON(&buf, s, nil); err != nil || strings.TrimSpace(buf.String()) != "[]" {
+		t.Errorf("vazio = %q (%v)", buf.String(), err)
+	}
+}

@@ -27,7 +27,72 @@ rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
 - `--strict` — valida um detalhe em que este programa é deliberadamente mais permissivo que
   o comportamento de referência (hoje: aceita comentário `/* */` de várias linhas; o
   `--strict` exige abrir e fechar na mesma linha).
-- `--encoding utf-8|latin-1` — codificação de leitura/escrita.
+- `--encoding utf-8|latin-1|cp850` — codificação de leitura/escrita. O `cp850` (página de
+  código DOS, comum em impressoras matriciais) vale para o script, para os dados e para a
+  saída.
+- `--format text|csv|json` — formato da saída (padrão: `text`, o relatório paginado de
+  colunas fixas). `csv` e `json` geram um registro por linha de entrada, na ordem do `sort`,
+  com as colunas do `input`; as seções `before`/`after`/`header`/`footer`/`detail` não são
+  executadas e `width`/`length`/margens são ignorados. Datas (`date` e `ldate`) saem como
+  `AAAA-MM-DD`, nulos como vazio (CSV) ou `null` (JSON), e `bool` como `true`/`false`.
+  `--format csv|json` não pode ser combinado com `--form-feed` (erro, código de saída 2).
+
+## Primeiros passos
+
+Dois exemplos prontos ficam em `examples/`: `relatorio-vendas-regiao/` (uma quebra, com
+total e contagem por grupo) e `relatorio-estoque-categoria/` (duas quebras em cascata, com
+`count`, `total` e `avg`). Ambos usam dados fictícios e não chamam `today`/`hour`, então a
+saída é sempre a mesma. A partir da raiz do repositório:
+
+```
+go build -o rptgo ./cmd/rptgo
+./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
+```
+
+Saída (sem as linhas em branco que completam a página no final):
+
+```
+
+
+                       VENDAS POR REGIAO
+  Regiao       Vendedor                Valor
+  ----------------------------------------
+  Leste        Diego Alves           450.25
+  Leste        Fabio Neri            780.00
+  Total Leste                      1,230.25
+  Vendas:                              2
+
+  Norte        Bruno Lima            980.00
+  Norte        Elisa Prado         1,320.40
+  Total Norte                      2,300.40
+  Vendas:                              2
+
+  Sul          Ana Souza           1,250.50
+  Sul          Carla Dias          2,100.75
+  Sul          Gina Rocha            310.10
+  Total Sul                        3,661.35
+  Vendas:                              3
+
+  TOTAL GERAL                      7,192.00
+```
+
+O mesmo script e os mesmos dados em CSV (o `sort regiao` ordena as linhas; só as colunas do
+`input` saem):
+
+```
+./rptgo --format csv examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
+```
+
+```
+regiao,vendedor,valor
+Leste,Diego Alves,450.25
+Leste,Fabio Neri,780
+Norte,Bruno Lima,980
+Norte,Elisa Prado,1320.4
+Sul,Ana Souza,1250.5
+Sul,Carla Dias,2100.75
+Sul,Gina Rocha,310.1
+```
 
 ## A linguagem do script (`.rp`)
 
@@ -65,10 +130,11 @@ end
 - **Comandos:** `print` (com `in col N`, `using 'máscara'`, `centered`, `no newline`),
   `skip [n]`, `page [, no footer][, no header]`, `need n`, `set var to expr`,
   `if expr then ... else ...`, `begin ... end`.
-- **Expressões:** aritmética (`+ - * /`), comparações (`= <> < > <= >=`), `and`/`or`/`not`,
-  `is [not] null`, constantes (números, `'texto'`, datas sem aspas como `31/12/2026`,
+- **Expressões:** aritmética (`+ - * / %`; `/` e `%` entre inteiros dão inteiro), comparações (`= <> < > <= >=`), `and`/`or`/`not`,
+  `is [not] null` (expressões lógicas valem 1 ou 0; `if`, `and`/`or`/`not` e `where` exigem
+  expressão lógica, não aritmética), constantes (números, `'texto'`, datas sem aspas como `31/12/2026`,
   repetição de caractere como `40[-]`), `today`, `hour`, `pageno`.
-- **Funções:** `count(* [where expr])`, `total`, `avg`, `min`, `max` (só em `after <chave>`/
+- **Funções:** `count(* [where expr])`, `total(expr [where expr])`, `avg`, `min`, `max` (só em `after <chave>`/
   `after report`), `dow`, `mdy`, `index`.
 - **Tipos de coluna:** `numeric`, `float`/`amount`, `date` (ano com 2 dígitos na impressão),
   `ldate` (ano com 4 dígitos), `string`, `text`, `bool`.
@@ -86,6 +152,10 @@ reprodutíveis.
 
 ```
 cmd/rptgo/          interface de linha de comando
+  cp850.go          tabela da página de código CP850 (--encoding cp850)
+  csv.go            saída --format csv
+  json.go           saída --format json
+examples/           relatórios de exemplo (vendas por região, estoque por categoria)
 internal/report/
   lexer.go          análise léxica (tokens, comentários, literais de data/repetição)
   parser.go         análise sintática recursiva descendente -> AST
