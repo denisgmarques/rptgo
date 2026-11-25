@@ -6,22 +6,15 @@
 
 ### Not applicable in this repository
 
-No persistence layer: no migrations directory, no ORM models, no schema files, no database driver (`go.mod` declares no dependencies). Data is read from a file or stdin and written to stdout or a file. In memory, a row is a positional `report.Row = []Value` aligned to the script's `input` columns (`internal/report/interp.go`).
+No persistence layer exists: no migrations directory, no ORM models, no schema files and no database driver in the manifest (`go.mod` has no `require`). Input is read once per run from a file or stdin and output is written to stdout or a file. Only per-run in-memory state exists:
 
-### In-memory row
-
-| Item | Detail |
-|---|---|
-| Row | `[]Value`, index = position in `Script.Input` |
-| Value | nil, int64, float64, string, `time.Time`, bool (`value.go`) |
-| InputCol | `Name`, `Type`, `Len`, `HasLen` (`ast.go`) |
-| Script | `Input`, `Width`, `Length`, `Top`, `Bottom`, `Left`, `Separator`, `Sort`, `Events`, `Variaveis`, `Nomeadas` |
-
-### Cache
-
-No cache. Interpreter state (`vars`, `pageno`, aggregate rows) lives for one run.
+- `Row = []Value` (`internal/report/interp.go`), positional by `Script.Input` order; `Interp.colIdx` maps column name to index.
+- `Value = any`: `nil` (null), `int64`, `float64`, `string`, `bool`, `time.Time` (`internal/report/value.go`).
+- `Script` AST: `Input []InputCol{Name, Type, Len, HasLen}`, `Sort []SortKey`, `Events map[EventKey][]Stmt`, `Variaveis`, `Nomeadas` (`internal/report/ast.go`).
+- `Interp.vars` holds `set` variables; `paginas [][]string` holds rendered pages.
+- No cache. The whole data file is read into memory (`io.ReadAll`) before processing.
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — type conversion rules
-- [`architecture.md`](architecture.md) — package layout
+- [`domain_rules.md`](domain_rules.md) — typing and conversion of records
+- [`architecture.md`](architecture.md) — where the in-memory state lives

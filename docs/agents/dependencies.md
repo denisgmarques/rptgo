@@ -6,24 +6,23 @@
 
 ### External services
 
-| Service | Purpose |
-|---|---|
-| None called by the binary | Stdlib only (`go.mod` has no `require`) |
-| Chrome/Chromium, `pdftoppm` | Dev-time README image rendering (`scripts/render-readme-images.sh`) |
+None. The program makes no network calls (no `net/http` or client packages in `cmd/rptgo` or `internal/report`).
 
 ### Internal libraries
 
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | Lexer, parser, interpreter, formats, dates; imported by `cmd/rptgo` |
+| `rptgo/internal/report` | Interpreter: tokenize, parse, type check, evaluate, paginate, masks, dates; imported by `cmd/rptgo` |
 
 ### Shared infrastructure
 
-- Filesystem, stdin, stdout, stderr only.
-- Environment variables read: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
-- No queues, caches, or observability stack.
+- Go 1.25 toolchain (`go.mod`); module `rptgo` with 0 third-party modules and no `go.sum`.
+- Standard library: `encoding/csv`, `encoding/json`, `regexp`, `time`, `sort`, `strconv`, `bufio`, `os`, `io`, `encoding/base64`, `html`.
+- Environment: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- Docs tooling only (`scripts/render-readme-images.sh`): headless browser and `pdftoppm`.
+- No CI, Makefile, queue, cache or observability stack.
 
 ## Related documents
 
-- [`tech_stack.md`](tech_stack.md) — language and tooling versions
-- [`architecture.md`](architecture.md) — integration points
+- [`tech_stack.md`](tech_stack.md) — language and test tooling
+- [`architecture.md`](architecture.md) — package boundaries

@@ -44,7 +44,9 @@
 - `RPT_NOW` fixes the clock.
 - Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage or option values.
 - Language behavior is pinned by tests under `internal/report` and `cmd/rptgo`.
-- Input sources (`cmd/rptgo/entrada.go`): delimited (default), CSV (RFC 4180 quoting, BOM, CRLF), JSON (array of objects or one object per line; keys match columns case-insensitively; nested values and columns missing from every record are errors).
+- Input sources (`cmd/rptgo/entrada.go`): delimited (default), CSV (standard quoting, BOM, CRLF), JSON (array of objects or one object per line; keys match columns case-insensitively; nested values and columns missing from every record are errors).
+- `--input-delimiter auto` (default for `--input csv`) tries `;` `,` tab `|` over the first 30 records and picks the one yielding the script's input column count (`detectaDelimitadorCSV`); falls back to the most consistent candidate, then comma.
+- `--input-decimal auto` selects comma only when numeric columns hold values like `1250,50` or `1.250,50` and none like `1250.50`; never with a comma delimiter (`detectaDecimalEntrada`).
 - `--input-decimal ','` converts `1.250,50` to `1250.50` in numeric columns (`ajustaDecimalEntrada`); the language itself reads only a decimal point.
 - CSV output (`cmd/rptgo/csv.go`, `csvOpcoes`): default comma, minimal quoting, point decimal, header row, ISO dates.
 - Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).

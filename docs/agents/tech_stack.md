@@ -8,34 +8,34 @@
 
 | Item | Value |
 |---|---|
-| Runtime | Native static CLI binary (`go build -o rptgo ./cmd/rptgo`) |
-| Package manager | Go modules, module `rptgo`, no `go.sum` |
+| Build output | Native static binary `rptgo` (`go build -o rptgo ./cmd/rptgo`) |
+| Module | `rptgo` (`go.mod`) |
+| Package manager | Go modules; no `require`, no `go.sum` |
+| Standard library in use | `encoding/csv`, `encoding/json`, `regexp`, `time`, `sort`, `strconv`, `bufio`, `encoding/base64`, `html` |
 
-- **Language**: Go 1.25 (`go.mod`)
-- **Framework**: No primary framework (stdlib only; `encoding/csv`, `encoding/json`, `regexp`, `sort`)
+- **Language**: Go 1.25
+- **Framework**: No primary framework
 
 ### Tests
 
 | Item | Value |
 |---|---|
-| Runner | `go test ./...` (stdlib `testing`; no CI or Makefile) |
-| Assertion lib | none (plain `testing`) |
-| Mock lib | none |
-| Coverage tool | none configured |
-| Golden update | `go test ./internal/report -run Golden -update` |
+| Runner | Go stdlib `testing` (`go test ./...`) |
+| Assertion lib | None (plain `t.Errorf`/`t.Fatalf`) |
+| Mock lib | None |
+| Coverage tool | None configured |
+| Golden files | `internal/report/testdata/golden/` (`go test ./internal/report -run Golden -update`) |
 | Benchmark | `BenchmarkConverte200k` (`internal/report/bench_test.go`) |
-| README check | `TestReadmeBlocosConferem` in `cmd/rptgo/readme_test.go` |
-
-- Lint: none configured.
+| Doc tests | `cmd/rptgo/readme_test.go`: `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` blocks and README images |
+| Example tests | `cmd/rptgo/examples_test.go` |
+| Lint / CI / Makefile | None |
 
 ### External integrations
 
-| System | Client wiring |
-|---|---|
-| Chrome/Chromium, `pdftoppm` | `scripts/render-readme-images.sh` only, not the binary |
+None. No network clients, databases or third-party packages. `scripts/render-readme-images.sh` needs Go, a headless browser and `pdftoppm` (docs tooling only).
 
 ## Related documents
 
 - [`architecture.md`](architecture.md) — package layout
-- [`coding_guidelines.md`](coding_guidelines.md) — code conventions
 - [`dependencies.md`](dependencies.md) — dependency inventory
+- [`coding_guidelines.md`](coding_guidelines.md) — test and code conventions

@@ -4,43 +4,46 @@
 
 ## AS IS — Current state
 
+No linter, formatter config, `.editorconfig` or pre-commit hook exists in the repo; the patterns below are observed in source and tests.
+
 ### 1. pt-BR identifiers and comments
 
-- Functions, types, fields and comments are pt-BR (`leRegistrosCSV`, `csvOpcoes`, `verificaTipos`, `ajustaDecimalEntrada`).
-- Docs and specs are English; pt-BR only for identifiers, flag values, quoted messages (`.claude/rules/bc-harness.md`).
+- Types, functions, fields and comments use Portuguese: `Interp`, `LinhasOrdenadas`, `detectaDelimitadorCSV`, `csvOpcoes`, `verificaTipos`, `leRegistrosJSON`.
+- Doc comments precede each function and state the rule, not the mechanics (`cmd/rptgo/entrada.go`, `internal/report/tipos.go`).
+- Docs under `docs/` are English (`.claude/rules/bc-harness.md`).
 
-### 2. Stdlib only, two packages
+### 2. Standard library only
 
-- No third-party modules (`go.mod` has no `require`).
-- `cmd/rptgo` does I/O and formats; `internal/report` holds language logic and never touches flags.
+- No third-party packages; `go.mod` has no `require` and no `go.sum`.
+- Option parsing is a manual `switch` in `analisaArgs` (`cmd/rptgo/main.go`) instead of the `flag` package, to accept options and positionals in any order.
+- CSV, JSON, templates and box drawing are hand-built on `encoding/csv`, `encoding/json`, `regexp` (`entrada.go`, `json.go`, `html.go`, `box.go`).
 
 ### 3. Errors carry source context
 
-- Script errors via `ErroLinhaScript`, data errors via `ErroLinhaDados`, others via `Erro` (`internal/report/errors.go`).
-- `comLinha` appends the source line plus a `^` marker.
-- CLI maps: 0 ok, 1 script/data/I-O/template error, 2 invalid usage.
+- Interpreter errors use `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`internal/report/errors.go`); the line variants print the source line and a `^` marker.
+- CLI prints `rptgo: <message>` to stderr and returns 1 for script, data, I/O or template errors; 2 for usage errors (`executar`, `erroUso`).
+- Option validation lives in `analisaArgs`; option combinations are rejected up front (for example `--csv-*` only with `--format csv`, `--template`/`--var`/`--logo`/`--title`/`--lines` only with `--format html`, `--form-feed` only with text).
 
-### 4. Validate at option parsing, not downstream
+### 4. One record list for every input source
 
-- Allowed values live in shared slices (`valoresFormato`, `valoresCSVQuote`, `valoresEncoding`) used by both validation and help (`ajuda.go`).
-- Incompatible flags are rejected up front (`--csv-*` only with `--format csv`; `--template/--var/--logo/--title/--lines` only with html).
+- Delimited, CSV and JSON readers all return `[][]string`; typing happens once in `Interp.converte`/`tipa` (`entrada.go`, `interp.go`).
+- New input sources must not convert types themselves; decimal rewriting stays in `ajustaDecimalEntrada`.
 
-### 5. All input sources converge on `[][]string`
+### 5. Output writers separate from the interpreter
 
-- Delimited, CSV and JSON readers return text records; the interpreter converts by declared type, so dates, numbers and bool behave identically across sources (`entrada.go`).
+- Text and HTML pages come from `Interp.Run` / `Interp.Paginas`; CSV and JSON take `Interp.LinhasOrdenadas()` and read only `Script.Input` (`cmd/rptgo/csv.go`, `json.go`).
+- Dates in CSV/JSON are always `2006-01-02` (`formatoISO`), independent of `DATEFMT`.
+- JSON objects are assembled by hand to keep declared key order.
 
-### 6. Static checks run once at parse end
+### 6. Tests pin behavior
 
-- Logical vs arithmetic typing for `if`, `and/or/not`, `count(* where ...)` (`verificaTipos`); alias name conflicts (`verificaNomes`).
-
-### 7. Deterministic output via fixtures
-
-- Golden baselines in `internal/report/testdata/golden/`; `RPT_NOW` pins the clock in tests and image rendering.
-- README code blocks tagged `file`/`run`/`expect`/`run-only` are verified by `readme_test.go`.
-- Writers build output by hand to keep key order and ISO dates (`json.go`, `csv.go`).
+- Table-driven tests with named cases (`TestLeRegistrosCSV`, `TestDetectaDelimitadorCSV`).
+- Golden baselines in `internal/report/testdata/golden/`, refreshed with `-update`.
+- README blocks are executed by `cmd/rptgo/readme_test.go`; edit README and scripts together.
+- `RPT_NOW` fixes the clock for reproducible output.
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — layers these patterns apply to
-- [`domain_rules.md`](domain_rules.md) — language rules the checks enforce
-- [`tech_stack.md`](tech_stack.md) — test tooling
+- [`architecture.md`](architecture.md) — package boundaries these patterns follow
+- [`domain_rules.md`](domain_rules.md) — behavior the tests pin
+- [`tech_stack.md`](tech_stack.md) — toolchain and test setup

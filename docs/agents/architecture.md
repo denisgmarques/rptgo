@@ -6,48 +6,47 @@
 
 ### Style
 
-Two-package layered CLI: `cmd/rptgo` (package `main`, presentation and I/O) over `internal/report` (lexer, parser, interpreter), module `rptgo` with stdlib only (`go.mod`).
+Two-package layered CLI: a thin `main` package (`cmd/rptgo`) for I/O, options and writers over an `internal/report` interpreter library (lexer, parser, type check, evaluator).
 
 ### Directory layout
 
 ```
 cmd/rptgo/                 CLI (package main)
-  main.go                  option parsing, validation, orchestration, exit codes
-  entrada.go               input readers: delimited, CSV, JSON; decimal adjustment
-  csv.go json.go           CSV (csvOpcoes) and JSON writers
-  html.go                  HTML template engine + built-in A4 template
-  box.go cp850.go          box-drawing swap, cp850 codec
-  ajuda.go                 --help text, allowed values, --csv-* validation
-  *_test.go                CLI, README, examples, writer tests
-internal/report/           language engine
-  lexer.go parser.go ast.go   script -> Script AST
-  tipos.go                 static checks (logical vs arithmetic, alias names)
-  interp.go                typing, sort, break events, aggregates, pagination
-  value.go format.go dates.go config.go errors.go
-  testdata/golden/         .rp/.dat/.txt golden baselines
-examples/                  7 sample report dirs (script + data)
-docs/images/               README PNG previews
-scripts/render-readme-images.sh   regenerates previews (pins RPT_NOW)
+  main.go                  executar(): arg parse, read, dispatch by --format, write
+  entrada.go               input readers (delimited helper in main.go, CSV, JSON), delimiter/decimal detection
+  csv.go                   csvOpcoes, escreveCSV, quoting modes
+  json.go                  escreveJSON (hand-built objects, declared key order)
+  html.go                  template tokenizer/renderer, default A4 template, logo data URI
+  box.go                   ASCII box (+---+, |) to line-drawing characters
+  cp850.go                 cp850 <-> rune tables
+  ajuda.go                 help text, delimitadorCSV, csvOpcoesValidas
+  *_test.go                CLI tests, readme_test.go, examples_test.go
+internal/report/           interpreter library
+  lexer.go parser.go ast.go   tokens -> Script AST
+  tipos.go                 verificaTipos (logical vs arithmetic), verificaNomes (named expressions)
+  interp.go                Interp: typing of input, sort, break levels, events, pagination
+  value.go format.go dates.go   values, `using` masks, date parse/format
+  config.go errors.go      env config + RPT_NOW clock, errors with source line
+  testdata/golden/         .rp/.dat inputs and .txt baselines
+examples/                  7 runnable examples (+ csv/json variants of relatorio-vendas-regiao)
+docs/images/               README images (scripts/render-readme-images.sh)
 ```
 
 ### Layer responsibilities
 
 | Layer | Owns | Does NOT own |
 |---|---|---|
-| `cmd/rptgo` | Flags, input reading, encodings, CSV/JSON/HTML/box output, exit codes | Language semantics, type conversion |
-| `internal/report` parser + `tipos.go` | Syntax, AST, static type/name checks | I/O, output formats |
-| `internal/report` interpreter | Conversion by input types, sort, events, aggregates, pagination, masks, dates | Reading files, flag validation |
-| `config.go` | Env lookup (`cfg`), clock (`RPT_NOW`) | Business logic |
+| `cmd/rptgo` | Flags, exit codes, file/stdin I/O, encodings, input readers, CSV/JSON/HTML/box writers | Script parsing, expression evaluation, pagination rules |
+| `report` lexer/parser/ast | Script syntax, defaults (`WIDTH`, `PAGELN`, `SEPARATOR`), AST | Data conversion, output |
+| `report` tipos | Static logical/arithmetic check, named-expression conflicts | Runtime evaluation |
+| `report` interp/value/format/dates | Row typing, sort, break levels, aggregates, masks, dates, pages | Flags, files, output formats other than text pages |
 
-### External integration points
+### External integrations
 
-| System | Client/config | Notes |
-|---|---|---|
-| Filesystem / stdin / stdout | `os` in `main.go` | Script, data, template, logo, `-o` output |
-| Browser for PDF | none in code | HTML output is printed externally; script uses Chrome/Chromium + `pdftoppm` for README images |
+None. Dependencies are the Go standard library only (`go.mod` has no `require`).
 
 ## Related documents
 
 - [`project_overview.md`](project_overview.md) — purpose and macro flow
 - [`tech_stack.md`](tech_stack.md) — language, tests, tooling
-- [`dependencies.md`](dependencies.md) — external and shared dependencies
+- [`coding_guidelines.md`](coding_guidelines.md) — code conventions observed in both packages

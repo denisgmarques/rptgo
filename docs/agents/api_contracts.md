@@ -4,50 +4,88 @@
 
 ## AS IS — Current state
 
-### Not applicable in this repository
+No HTTP endpoints, RPC or queues exist (no server code, no network packages in `cmd/rptgo` or `internal/report`). The contract is the CLI, its exit codes, the HTML template placeholders and the CSV/JSON output shapes.
 
-No HTTP endpoints, message queues or RPC surface exist: `go.mod` has no dependencies, no `net/http` server in `cmd/rptgo`, no route or handler files. The contract is the CLI below, plus the `.rp` language (see `domain_rules.md`) and HTML template placeholders.
+### HTTP endpoints
 
-### CLI contract
+Not applicable. See sections below for the CLI surface.
+
+### CLI
 
 ```
-rptgo [OPTION]... SCRIPT.rp [DATA | -]
+rptgo [options] script.rp [data-file | -]
 ```
 
-| Option | Values | Applies to |
+- 1st positional = script (required, else exit 2); 2nd = data file; absent or `-` = stdin.
+- Options and positionals may be mixed in any order. Unknown `-x` option = exit 2.
+- `-h`/`--help` anywhere prints help to stdout, exit 0.
+
+| Exit | Meaning |
+|---|---|
+| 0 | Success (also `--check` with no syntax errors) |
+| 1 | Script, data, I/O or template error; message `rptgo: ...` on stderr |
+| 2 | Usage error or invalid option value; usage hint on stderr |
+
+### Options
+
+| Option | Values / default | Constraint |
 |---|---|---|
-| `-o, --output` | file | all |
-| `--format` | `text` (default), `html`, `csv`, `json` | all; csv/json/html reject `--form-feed` |
-| `--encoding` | `utf-8`, `latin-1`, `cp850` (+ aliases) | read and write |
-| `--header` | `auto`, `sim`, `nao` | first data line is header |
-| `--newline` | `auto`, `lf`, `crlf` | all |
-| `--form-feed` | flag | text |
-| `--box` | flag | text, html |
-| `--strict` | flag | comments must close on same line |
-| `--input` | `delimited`, `csv`, `json` | input |
-| `--input-delimiter` | char | only `--input csv` |
-| `--input-decimal` | `.` or `,` | invalid with json or comma delimiter |
-| `--csv-delimiter` | char or `comma`, `semicolon`, `tab`, `pipe` | csv output |
-| `--csv-quote` | `minimal`, `strings`, `all` | csv output |
-| `--csv-decimal` | `.` or `,` | csv output |
-| `--csv-no-header` | flag | csv output |
-| `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines` | see below | html only |
-| `-r, --check` | flag | syntax check only |
-| `-h, --help` | flag | help |
+| `-o`, `--output`, `--saida` | file path; default stdout | |
+| `--encoding` | `utf-8` (default), `latin-1`, `cp850`; applies to script, data and output | HTML output is always UTF-8 |
+| `--header` | `auto` (default), `sim`, `nao` | |
+| `--form-feed` | flag | text only |
+| `--newline` | `auto` (CRLF on Windows), `lf`, `crlf` | |
+| `--format` | `text` (default), `html`, `csv`, `json` | |
+| `--box` | flag | text or html; not with `latin-1` text |
+| `--input` | `delimited` (default), `csv`, `json` | |
+| `--input-delimiter` | `auto`, `comma`, `semicolon`, `tab`, `pipe`, `\t` or 1 char | only `--input csv`; `auto` is the csv default |
+| `--input-decimal` | `.`, `,`, `auto`; unset = point | not with `--input json`; `,` not with comma delimiter |
+| `--csv-delimiter` | same names/char; default `,` | only `--format csv` |
+| `--csv-quote` | `minimal` (default), `strings`, `all` | only `--format csv` |
+| `--csv-decimal` | `.` (default), `,` | only `--format csv`; differs from delimiter |
+| `--csv-no-header` | flag | only `--format csv` |
+| `--template` | HTML template file | only `--format html` |
+| `--var NAME=VALUE` | `NAME` = `[A-Za-z_][A-Za-z0-9_]*`; repeatable | only `--format html` |
+| `--logo` | image file embedded as base64 data URI | only `--format html` |
+| `--title` | default = script file name without extension | only `--format html` |
+| `--lines` | integer >= 1, text lines per page | only `--format html` |
+| `--strict` | flag; `/* */` comments must close on the same line | |
+| `--check`, `-r` | flag; parse script only, print `No syntax errors were found in the report script.` | |
 
-- Exit codes: 0 ok; 1 script, data, I/O or template error; 2 invalid usage or option values.
-- Usage errors print `rptgo: <msg>` plus a `--help` hint (`erroUso`).
-- Env: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+Environment read by the interpreter: `DATEFMT` (`DD/MM/YY`), `CENTURY_CUTOFF` (30), `TIMEFMT` (`HH:MM`), `WIDTH` (80), `PAGELN` (66), `SEPARATOR` (`\|`), `RADIXSEP` (`.`), `CURRSYM` (`$`), `RPT_NOW` (`2026-11-24 17:47`, `2006-01-02 15:04:05` or RFC 3339; fixes the clock).
 
-### HTML template placeholders
+### Script contract (`.rp`)
 
-- `{{Name}}` escaped value; `{{#Pages}}...{{/Pages}}` repeats per page (once, not nested).
-- Globals: `Title`, `Script`, `Date`, `Time`, `Columns`, `PageCount`, `Logo`, plus `--var`. In the block: `PageNumber`, `Text`.
-- Unknown variable, unclosed `{{`, or missing page block → error with template line (exit 1).
+Example (`examples/relatorio-vendas-regiao/relatorio.rp`):
 
-### Message formats
+```
+input
+   regiao    [string 10],
+   vendedor  [string 14],
+   valor     [amount 10]
 
-Example from `examples/relatorio-vendas-regiao` (`rptgo --format json relatorio.rp dados.txt`):
+width 60
+length 26
+sort regiao
+
+detail
+   print regiao in col 1, vendedor in col 14, valor in col 30 using '#,###,##&.&&'
+
+after regiao
+   print 'Total ' + regiao in col 1, total(valor) in col 30 using '#,###,##&.&&'
+end
+```
+
+Data (`dados.txt`, pipe-delimited):
+
+```
+Sul|Ana Souza|1250.50
+Norte|Bruno Lima|980.00
+```
+
+### JSON output (`--format json`)
+
+One object per line inside an array, keys in `input` order, sorted by `sort`; empty set prints `[]`. Event sections do not run.
 
 ```json
 [
@@ -57,7 +95,7 @@ Example from `examples/relatorio-vendas-regiao` (`rptgo --format json relatorio.
 ]
 ```
 
-Same data as `--format csv --csv-delimiter ';' --csv-decimal ',' --csv-quote strings`:
+### CSV output (`--format csv --csv-delimiter ';' --csv-decimal ',' --csv-quote strings`)
 
 ```
 "regiao";"vendedor";"valor"
@@ -65,7 +103,15 @@ Same data as `--format csv --csv-delimiter ';' --csv-decimal ',' --csv-quote str
 "Leste";"Fabio Neri";780
 ```
 
-JSON input accepted (`dados.json`):
+### CSV and JSON input
+
+```
+regiao;vendedor;valor
+Sul;Ana Souza;1.250,50
+Norte;Bruno Lima;980,00
+```
+
+Run with `--input csv --input-decimal auto` (or `,`). Without it, `1.250,50` fails: `valor inválido em 'valor' (registro 1)`. JSON input is an array of objects or one object per line:
 
 ```json
 [
@@ -74,8 +120,39 @@ JSON input accepted (`dados.json`):
 ]
 ```
 
+### HTML template (`--format html`)
+
+| Placeholder | Scope | Value |
+|---|---|---|
+| `{{Title}}` | global | `--title` or script base name |
+| `{{Script}}` | global | script file name |
+| `{{Date}}`, `{{Time}}` | global | `2006-01-02`, `15:04` from `RPT_NOW` or clock |
+| `{{Columns}}` | global | widest page line in runes |
+| `{{PageCount}}` | global | number of pages |
+| `{{Logo}}` | global | data URI of `--logo`, else empty |
+| `{{Name}}` | global | each `--var NAME=VALUE` |
+| `{{#Pages}} ... {{/Pages}}` | block | repeated per page; exactly one block, not nested |
+| `{{PageNumber}}`, `{{Text}}` | in block | page index, page text |
+
+- All values HTML-escaped. Unknown variable, bad marker, missing or unbalanced block = error (exit 1) with template line.
+- Without `--template`, a built-in A4 template renders (`modeloPadrao`).
+
+### Error message shape
+
+```
+rptgo: valor inválido em 'valor' (registro 1): "1.250,50" (strconv.ParseFloat: parsing "1.250,50": invalid syntax)
+  1 | regiao;vendedor;valor
+      ^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+Script errors print `linha N: <message>` plus the source line and `^` marker.
+
+### Message formats
+
+Not applicable: no queues, topics or async messaging.
+
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — semantics behind each option
-- [`project_overview.md`](project_overview.md) — macro flow
-- [`architecture.md`](architecture.md) — where options are validated
+- [`domain_rules.md`](domain_rules.md) — rules behind input detection and output values
+- [`project_overview.md`](project_overview.md) — run flow and consumers
+- [`architecture.md`](architecture.md) — where options and writers live
