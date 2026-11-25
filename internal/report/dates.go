@@ -54,8 +54,9 @@ func ParseData(txt string) (time.Time, bool, error) {
 	if anoTxt == "" {
 		anoTxt = campos["YY"]
 	}
-	if len(a) == 4 && campos["YYYY"] == "" {
-		// AAAA-MM-DD também é aceito, mesmo sem DATEFMT configurado assim
+	if len(a) == 4 && (len(ordem) == 0 || (ordem[0] != "YYYY" && ordem[0] != "YY")) {
+		// AAAA-MM-DD (ISO) também é aceito, qualquer que seja o DATEFMT, desde que o formato
+		// configurado não comece pelo ano (nesse caso o primeiro campo já é o ano).
 		anoTxt, mesTxt, diaTxt = a, b, c
 	}
 	dia, _ := strconv.Atoi(diaTxt)
