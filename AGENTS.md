@@ -21,7 +21,7 @@
 | `./rptgo --help` | Print CLI help |
 | `go test ./...` | Run all tests (Go convention; no CI or Makefile defines it) |
 | `go test ./internal/report -run Golden -update` | Regenerate golden baselines (`internal/report/golden_test.go`) |
-| `scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (needs Go, Chrome/Chromium, `pdftoppm`; pins `RPT_NOW`) |
+| `scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (needs Go, a headless browser, `pdftoppm`; pins `RPT_NOW`) |
 
 - Test runner: Go stdlib `testing`.
 - `cmd/rptgo/readme_test.go` verifies README blocks: `TestReadmeBlocosConferem`, `TestReadmeImagensExistem`.
@@ -43,12 +43,15 @@
 - Env config: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
 - `RPT_NOW` fixes the clock.
 - Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage or option values.
-- Language behavior reference: the public RPT report-language documentation; behavior is pinned by the tests under `internal/report` and `cmd/rptgo`.
+- Language behavior is pinned by tests under `internal/report` and `cmd/rptgo`.
+- Input sources (`cmd/rptgo/entrada.go`): delimited (default), CSV (RFC 4180 quoting, BOM, CRLF), JSON (array of objects or one object per line; keys match columns case-insensitively; nested values and columns missing from every record are errors).
+- `--input-decimal ','` converts `1.250,50` to `1250.50` in numeric columns (`ajustaDecimalEntrada`); the language itself reads only a decimal point.
+- CSV output (`cmd/rptgo/csv.go`, `csvOpcoes`): default comma, minimal quoting, point decimal, header row, ISO dates.
 - Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
 
-- Follow bc-harness workflows (`.claude/rules/bc-harness.md`).
+- Follow the workflows in `.claude/rules/bc-harness.md`.
 - Write docs and specs in English; keep pt-BR only for identifiers, flag values, quoted messages.
 - Ground claims in repo files; run `go test ./...` after code changes.
 
@@ -60,7 +63,7 @@
 
 ## 4. Setup, Troubleshooting and Tips
 
-- Prereq: Go 1.25. Image regeneration also needs Chrome/Chromium and `pdftoppm`.
+- Prereq: Go 1.25. Image regeneration also needs a headless browser and `pdftoppm`.
 
 ```sh
 go build -o rptgo ./cmd/rptgo
@@ -68,12 +71,13 @@ go build -o rptgo ./cmd/rptgo
 ./rptgo examples/relatorio-vendas-regiao/relatorio.rp examples/relatorio-vendas-regiao/dados.txt
 ```
 
-- CLI options: `-h/--help`, `-o/--saida/--output`, `--encoding utf-8|latin-1|cp850`, `--header auto|sim|nao`, `--form-feed`, `--newline auto|lf|crlf`, `--format text|csv|json|html`, `--box`, `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines`, `--strict`, `--check/-r`.
+- CLI options: `-h/--help`, `-o/--output`, `--encoding utf-8|latin-1|cp850`, `--header`, `--form-feed`, `--newline`, `--format text|html|csv|json`, `--box`, `--input delimited|csv|json`, `--input-delimiter`, `--input-decimal`, `--csv-delimiter`, `--csv-quote minimal|strings|all`, `--csv-decimal`, `--csv-no-header`, `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines`, `--strict`, `--check/-r`.
 
 | Symptom | Check |
 |---|---|
-| Exit code 2 | Usage error, invalid option value, or `--form-feed` with `--format csv\|json\|html` |
+| Exit code 2 | Invalid usage or option values; see rules below |
 | Exit code 1 | Script, data, I/O or template error; read source-line context in message |
+| Option combination rejected | `--input-decimal ','` invalid with `--input json` or a comma input delimiter; `--input-delimiter` only with `--input csv`; `--csv-*` only with `--format csv`; `--template/--var/--logo/--title/--lines` only with html; `--box` only with text or html and an encoding with box characters |
 | Non-deterministic dates in output | Set `RPT_NOW` |
 | Golden test fails after intended change | Run golden update command from section 1 |
 | README test fails | Re-sync block with file or command output |
@@ -84,7 +88,7 @@ go build -o rptgo ./cmd/rptgo
 |---|---|
 | [README.md](README.md) | User docs (pt-BR): showcase, usage, language, examples |
 | [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
-| [examples/](examples) | 7 examples, each with `.rp` script and data file |
+| [examples/](examples) | 7 examples, each with `.rp` script and data files (`relatorio-vendas-regiao` also has CSV and JSON) |
 | [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README preview image generator |
 
 ## 6. Agent Documentation

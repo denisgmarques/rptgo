@@ -8,21 +8,22 @@
 
 | Service | Purpose |
 |---|---|
-| None at runtime | Stdlib only; no network clients |
+| None called by the binary | Stdlib only (`go.mod` has no `require`) |
+| Chrome/Chromium, `pdftoppm` | Dev-time README image rendering (`scripts/render-readme-images.sh`) |
 
 ### Internal libraries
 
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | Lexer, parser, interpreter, formatting; imported by `cmd/rptgo` |
+| `rptgo/internal/report` | Lexer, parser, interpreter, formats, dates; imported by `cmd/rptgo` |
 
 ### Shared infrastructure
 
-- Go modules: `go.mod` (`go 1.25`), 0 third-party requirements, no `go.sum`.
-- Dev-only tooling in `scripts/render-readme-images.sh`: Go, Google Chrome/Chromium, `pdftoppm` (poppler-utils).
-- No queues, caches, CI or observability.
+- Filesystem, stdin, stdout, stderr only.
+- Environment variables read: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
+- No queues, caches, or observability stack.
 
 ## Related documents
 
-- [`tech_stack.md`](tech_stack.md) — language, tests
-- [`architecture.md`](architecture.md) — package layout
+- [`tech_stack.md`](tech_stack.md) — language and tooling versions
+- [`architecture.md`](architecture.md) — integration points

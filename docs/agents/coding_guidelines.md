@@ -4,42 +4,43 @@
 
 ## AS IS — Current state
 
-### 1. Portuguese identifiers and comments
+### 1. pt-BR identifiers and comments
 
-- Identifiers, comments and user-facing messages are pt-BR (`executar`, `leRegistros`, `NovoInterp`, `Erro`); exported API names mix (`Tokenize`, `Parse`, `Agora`).
-- Docs under `docs/` are English (`.claude/rules/bc-harness.md`). No linter enforces either.
+- Functions, types, fields and comments are pt-BR (`leRegistrosCSV`, `csvOpcoes`, `verificaTipos`, `ajustaDecimalEntrada`).
+- Docs and specs are English; pt-BR only for identifiers, flag values, quoted messages (`.claude/rules/bc-harness.md`).
 
-### 2. Single error type with source context
+### 2. Stdlib only, two packages
 
-- Library errors go through `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`internal/report/errors.go`); the line plus a `^` marker is appended from `FonteScript`/`FonteDados`.
-- CLI prints `<program>: <err>` to stderr and returns an exit code from `executar` (`main.go`); `main` only calls `os.Exit`.
+- No third-party modules (`go.mod` has no `require`).
+- `cmd/rptgo` does I/O and formats; `internal/report` holds language logic and never touches flags.
 
-### 3. Manual option parsing with shared value lists
+### 3. Errors carry source context
 
-- `analisaArgs` parses argv by hand (not `flag`) so options and positionals mix freely.
-- Allowed values live once in `ajuda.go` (`valoresHeader`, `valoresNewline`, `valoresFormato`, `valoresEncoding`) and feed both validation and help text.
-- Option-combination errors return exit 2.
+- Script errors via `ErroLinhaScript`, data errors via `ErroLinhaDados`, others via `Erro` (`internal/report/errors.go`).
+- `comLinha` appends the source line plus a `^` marker.
+- CLI maps: 0 ok, 1 script/data/I-O/template error, 2 invalid usage.
 
-### 4. Testable entrypoint
+### 4. Validate at option parsing, not downstream
 
-- `executar(args, stdin, stdout, stderr) int` takes injected streams; tests call it directly (`executa` helper in `cmd/rptgo/*_test.go`).
+- Allowed values live in shared slices (`valoresFormato`, `valoresCSVQuote`, `valoresEncoding`) used by both validation and help (`ajuda.go`).
+- Incompatible flags are rejected up front (`--csv-*` only with `--format csv`; `--template/--var/--logo/--title/--lines` only with html).
 
-### 5. Golden and doc-verified tests
+### 5. All input sources converge on `[][]string`
 
-- Golden baselines in `internal/report/testdata/golden`, rewritten only with `-update` (`golden_test.go`).
-- README blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` are executed by `readme_test.go`; update README and code together.
-- Time-dependent output pins `RPT_NOW`.
+- Delimited, CSV and JSON readers return text records; the interpreter converts by declared type, so dates, numbers and bool behave identically across sources (`entrada.go`).
 
-### 6. Dynamic values, null-aware operators
+### 6. Static checks run once at parse end
 
-- `Value = any` holding nil, int64, float64, string, time.Time or bool (`value.go`); every operator normalizes nil and bool before use (`normaliza`, `aritm`, `comparar`).
+- Logical vs arithmetic typing for `if`, `and/or/not`, `count(* where ...)` (`verificaTipos`); alias name conflicts (`verificaNomes`).
 
-### 7. Static checks at parse end
+### 7. Deterministic output via fixtures
 
-- `Parse` finishes with `verificaNomes` then `verificaTipos` (`tipos.go`); bad scripts fail before data is read.
+- Golden baselines in `internal/report/testdata/golden/`; `RPT_NOW` pins the clock in tests and image rendering.
+- README code blocks tagged `file`/`run`/`expect`/`run-only` are verified by `readme_test.go`.
+- Writers build output by hand to keep key order and ISO dates (`json.go`, `csv.go`).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — layers and files these patterns live in
+- [`architecture.md`](architecture.md) — layers these patterns apply to
 - [`domain_rules.md`](domain_rules.md) — language rules the checks enforce
 - [`tech_stack.md`](tech_stack.md) — test tooling

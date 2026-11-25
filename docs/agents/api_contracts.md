@@ -4,58 +4,78 @@
 
 ## AS IS — Current state
 
-### CLI
+### Not applicable in this repository
 
-Usage: `rptgo [OPTION]... SCRIPT.rp [INPUT.txt | -]`. Binary name in messages comes from `argv[0]`. No network API; contract = flags, exit codes, output formats, HTML template.
+No HTTP endpoints, message queues or RPC surface exist: `go.mod` has no dependencies, no `net/http` server in `cmd/rptgo`, no route or handler files. The contract is the CLI below, plus the `.rp` language (see `domain_rules.md`) and HTML template placeholders.
 
-| Flag | Values | Notes |
+### CLI contract
+
+```
+rptgo [OPTION]... SCRIPT.rp [DATA | -]
+```
+
+| Option | Values | Applies to |
 |---|---|---|
-| `-o, --saida, --output FILE` | path | write file instead of stdout |
-| `--format` | `text`(default) `csv` `json` `html` | csv/json/html reject `--form-feed` |
-| `--encoding` | `utf-8` `utf8` `latin-1` `latin1` `iso-8859-1` `iso8859-1` `cp850` | case-insensitive; reads and writes; html output always UTF-8 |
-| `--header` | `auto` `sim` `nao` | first data line is header |
-| `--form-feed` | flag | `\f` between pages |
-| `--newline` | `auto` `lf` `crlf` | auto = crlf on Windows |
-| `--box` | flag | text or html only; not with latin-1 |
-| `--strict` | flag | single-line comments |
-| `--template FILE`, `--var NAME=VALUE` (repeat), `--logo FILE`, `--title TEXT`, `--lines N` | html only | NAME matches `[A-Za-z_][A-Za-z0-9_]*`; N >= 1; logo png/jpg/jpeg/gif/svg/webp |
+| `-o, --output` | file | all |
+| `--format` | `text` (default), `html`, `csv`, `json` | all; csv/json/html reject `--form-feed` |
+| `--encoding` | `utf-8`, `latin-1`, `cp850` (+ aliases) | read and write |
+| `--header` | `auto`, `sim`, `nao` | first data line is header |
+| `--newline` | `auto`, `lf`, `crlf` | all |
+| `--form-feed` | flag | text |
+| `--box` | flag | text, html |
+| `--strict` | flag | comments must close on same line |
+| `--input` | `delimited`, `csv`, `json` | input |
+| `--input-delimiter` | char | only `--input csv` |
+| `--input-decimal` | `.` or `,` | invalid with json or comma delimiter |
+| `--csv-delimiter` | char or `comma`, `semicolon`, `tab`, `pipe` | csv output |
+| `--csv-quote` | `minimal`, `strings`, `all` | csv output |
+| `--csv-decimal` | `.` or `,` | csv output |
+| `--csv-no-header` | flag | csv output |
+| `--template`, `--var NAME=VALUE`, `--logo`, `--title`, `--lines` | see below | html only |
 | `-r, --check` | flag | syntax check only |
-| `-h, --help` | flag | exit 0, help to stdout |
+| `-h, --help` | flag | help |
 
-Exit codes: 0 ok; 1 script/data/I-O/template error; 2 invalid usage (unknown option, bad value, missing script, forbidden combination). Errors go to stderr as `rptgo: <msg>`; usage errors add `Tente 'rptgo --help' para mais informações.`
+- Exit codes: 0 ok; 1 script, data, I/O or template error; 2 invalid usage or option values.
+- Usage errors print `rptgo: <msg>` plus a `--help` hint (`erroUso`).
+- Env: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
 
-Example:
+### HTML template placeholders
 
-```
-rptgo --format html --box --template modelo.html --logo logo.svg relatorio.rp dados.txt > saida.html
-```
+- `{{Name}}` escaped value; `{{#Pages}}...{{/Pages}}` repeats per page (once, not nested).
+- Globals: `Title`, `Script`, `Date`, `Time`, `Columns`, `PageCount`, `Logo`, plus `--var`. In the block: `PageNumber`, `Text`.
+- Unknown variable, unclosed `{{`, or missing page block → error with template line (exit 1).
 
-### Output formats
+### Message formats
 
-- text: paginated report, `\n` (or `\r\n`).
-- csv: header of input column names, comma delimiter, RFC 4180 quoting, rows in sort order; dates `YYYY-MM-DD`, null empty, numbers shortest decimal, bool `true`/`false`.
-- json: array, one object per line, keys in input order; null -> `null`; empty -> `[]`.
-
-Sample from `examples/invoice-aging/data.txt` (columns customer, invoice, issued, due, amount, paid) with `--format json`:
+Example from `examples/relatorio-vendas-regiao` (`rptgo --format json relatorio.rp dados.txt`):
 
 ```json
 [
-{"customer":"Acme Corp","invoice":"INV-1001","issued":"2026-03-01","due":"2026-03-31","amount":12500,"paid":true},
-{"customer":"Acme Corp","invoice":"INV-1042","issued":"2026-04-15","due":"2026-06-14","amount":8300.5,"paid":false}
+{"regiao":"Leste","vendedor":"Diego Alves","valor":450.25},
+{"regiao":"Leste","vendedor":"Fabio Neri","valor":780},
+{"regiao":"Norte","vendedor":"Bruno Lima","valor":980}
 ]
 ```
 
-### HTML template
+Same data as `--format csv --csv-delimiter ';' --csv-decimal ',' --csv-quote strings`:
 
-- Plain text with `{{Name}}` (HTML-escaped) and one `{{#Pages}}...{{/Pages}}` block repeated per page; missing, nested or duplicated block errors with template line.
-- Globals: `Title` (default script basename), `Script`, `Date` (`YYYY-MM-DD`), `Time` (`HH:MM`), `Columns`, `PageCount`, `Logo` (data URI, empty if no `--logo`), plus `--var`.
-- In block only: `PageNumber`, `Text`.
-- Unknown variable -> error; `--var` using a reserved name -> error.
-- Default template: embedded A4 sheets; logo `<img>` only with `--logo`. Example: `examples/invoice-html/template.html`.
-- Lines per page default `length - top - bottom`; override `--lines`.
+```
+"regiao";"vendedor";"valor"
+"Leste";"Diego Alves";450,25
+"Leste";"Fabio Neri";780
+```
+
+JSON input accepted (`dados.json`):
+
+```json
+[
+  {"regiao": "Sul", "vendedor": "Ana Souza", "valor": 1250.50},
+  {"regiao": "Norte", "vendedor": "Bruno Lima", "valor": 980.00}
+]
+```
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — .rp language semantics
-- [`architecture.md`](architecture.md) — format dispatch in `main.go`
+- [`domain_rules.md`](domain_rules.md) — semantics behind each option
 - [`project_overview.md`](project_overview.md) — macro flow
+- [`architecture.md`](architecture.md) — where options are validated

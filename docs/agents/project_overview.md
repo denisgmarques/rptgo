@@ -6,42 +6,43 @@
 
 ### Purpose
 
-`rptgo` is a Go CLI that runs a declarative report script (`.rp`, RPT-style language) over pipe-separated text data and writes a paginated text report, CSV, JSON or HTML (`cmd/rptgo/main.go`, `README.md`).
+`rptgo` is a Go CLI that runs a report script (`.rp`) over delimited, CSV or JSON data and writes a paginated text, HTML/PDF-ready, CSV or JSON result.
 
 ### Business problem
 
-- Text data (database or business-system exports) needs aligned columns, per-page header/footer, cascading control breaks and per-level count/total/avg/min/max (`README.md`, `internal/report/interp.go` `executa`).
-- Hand-coding that layout per report is costly; one `.rp` script feeds text, CSV, JSON and HTML output (`--format`).
-- Legacy RPT scripts need a runnable engine.
+- Without it, control-break reports (group totals, counts, grand totals, page headers/footers) need hand-written code per report.
+- The `.rp` language declares input columns, sort keys and event sections (`before`/`after`/`header`/`footer`/`detail`) instead (`internal/report/parser.go`).
+- Excel-style Brazilian CSV (`;` delimiter, `1.250,50`, Latin-1) is readable without preprocessing (`--input-decimal`, `cmd/rptgo/entrada.go`).
 
 ### Consumers and integrations
 
 | System | Role |
 |---|---|
-| Shell / pipelines | Invoke `rptgo [opts] script.rp [data.txt \| -]`; stdin when data omitted or `-` |
-| Line/dot-matrix printers | Consume text output; `--encoding cp850\|latin-1`, `--newline crlf`, `--form-feed` |
-| Spreadsheet/JSON consumers | Read `--format csv` / `--format json` |
-| Browser / PDF printing | Read `--format html` (A4 sheets, optional `--template`, `--logo`); `scripts/render-readme-images.sh` uses Chrome + pdftoppm for README PNGs |
-| Environment | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
+| Shell / pipelines | Invokes `rptgo [options] script.rp [data or -]`; stdin when data omitted or `-` (`cmd/rptgo/main.go`) |
+| Files (`.rp`, data, HTML template, logo) | Inputs read from disk |
+| Browser / PDF printer | Consumes `--format html` output (A4 sheets); `scripts/render-readme-images.sh` uses Chrome/Chromium + `pdftoppm` |
+| Spreadsheet tools | Consume `--format csv` output; produce CSV input |
+| Env vars | `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW` |
 
 ### Macro flow
 
-1. `main` -> `executar`: parse argv (`analisaArgs`), validate option combos; exit 2 on misuse.
-2. Read script file, decode (`--encoding`), `report.Tokenize` -> `report.Parse` (static type + name checks).
-3. `--check`/`-r`: print "No syntax errors were found in the report script." and exit 0.
-4. Read data (file or stdin), decode, split into records (`leRegistros`; header line dropped per `--header`).
-5. `report.NovoInterp` converts fields to typed values per `input` columns.
-6. By format: text -> `Interp.Run`; csv/json -> `LinhasOrdenadas` (sort only, no events); html -> `Interp.Paginas` + template.
-7. Optional `--box`, CRLF conversion, re-encode; write to `-o` file or stdout. Exit 0, or 1 on script/data/IO/template error.
+1. Parse options (`analisaArgs`), validate combinations; exit 2 on invalid usage.
+2. Read script; lex (`lexer.go`), parse (`parser.go`), static checks (`verificaTipos`, `verificaNomes`). `--check` stops here.
+3. Read data: delimited, CSV or JSON into a `[][]string` record list; apply `--input-decimal`.
+4. `NovoInterp` converts fields by declared input types (`converte`/`tipa`).
+5. Sort rows by `sort` keys (stable, nulls first).
+6. `--format csv|json`: write `LinhasOrdenadas` (input + sort only).
+7. `--format text|html`: walk rows, fire break events, accumulate `count/total/avg/min/max`, paginate (`Run` / `Paginas`).
+8. Encode (utf-8, latin-1, cp850), apply newline mode, write to stdout or `-o` file. Exit 0; 1 on script/data/I-O/template error.
 
 ### Out of scope
 
-- No network, database or daemon: flat-file input only.
-- CSV/JSON ignore event sections, width, length and margins (`cmd/rptgo/csv.go`).
-- HTML output is always UTF-8 and has no blank-line padding (`main.go`).
+- No network, database or server mode: input is file/stdin only.
+- CSV/JSON output ignore `before`/`after`/`detail` events, `print` items, masks and page layout (`Interp.LinhasOrdenadas` doc comment).
+- Decimal-comma input is an opt-in extension; the language itself reads a decimal point only.
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — layout, layers, pipeline
-- [`domain_rules.md`](domain_rules.md) — .rp language semantics
-- [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, template placeholders
+- [`architecture.md`](architecture.md) — layout and layer boundaries
+- [`domain_rules.md`](domain_rules.md) — language and input/output rules
+- [`api_contracts.md`](api_contracts.md) — CLI contract

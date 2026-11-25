@@ -6,52 +6,48 @@
 
 ### Style
 
-Two-package Go layout: thin CLI (`cmd/rptgo`, package main) over an interpreter library (`internal/report`) following lexer -> parser (AST) -> static checks -> tree-walking interpreter.
+Two-package layered CLI: `cmd/rptgo` (package `main`, presentation and I/O) over `internal/report` (lexer, parser, interpreter), module `rptgo` with stdlib only (`go.mod`).
 
 ### Directory layout
 
 ```
 cmd/rptgo/                 CLI (package main)
-  main.go                  args, I/O, encoding, format dispatch, exit codes
-  ajuda.go                 help text, allowed option value lists, program name (argv[0])
-  csv.go json.go           flat output of input columns (sorted rows)
-  html.go                  {{...}} template engine, default A4 template, logo data URI
-  box.go                   ASCII box (+--+ |) -> line-drawing chars
-  cp850.go                 cp850 <-> rune tables
-  *_test.go                CLI, examples, README block verification
-internal/report/           interpreter library
-  lexer.go parser.go ast.go   tokens, recursive-descent parser, AST
-  tipos.go                 static logical-vs-arithmetic and named-expression checks
-  interp.go                typed row conversion, expression eval, sort, control breaks, pagination
-  value.go format.go dates.go  dynamic values/operators, 'using' masks, date parse/format
-  config.go errors.go      env config (RPT_NOW), error type with source-line context
-  testdata/golden/         .rp/.dat/.txt baselines (estoque, misto, vendas)
-examples/                  7 runnable examples (+ invoice-html with template.html, logo.svg)
-docs/images/               README previews (PNG)
-scripts/render-readme-images.sh  regenerates previews (pins RPT_NOW)
+  main.go                  option parsing, validation, orchestration, exit codes
+  entrada.go               input readers: delimited, CSV, JSON; decimal adjustment
+  csv.go json.go           CSV (csvOpcoes) and JSON writers
+  html.go                  HTML template engine + built-in A4 template
+  box.go cp850.go          box-drawing swap, cp850 codec
+  ajuda.go                 --help text, allowed values, --csv-* validation
+  *_test.go                CLI, README, examples, writer tests
+internal/report/           language engine
+  lexer.go parser.go ast.go   script -> Script AST
+  tipos.go                 static checks (logical vs arithmetic, alias names)
+  interp.go                typing, sort, break events, aggregates, pagination
+  value.go format.go dates.go config.go errors.go
+  testdata/golden/         .rp/.dat/.txt golden baselines
+examples/                  7 sample report dirs (script + data)
+docs/images/               README PNG previews
+scripts/render-readme-images.sh   regenerates previews (pins RPT_NOW)
 ```
 
 ### Layer responsibilities
 
 | Layer | Owns | Does NOT own |
 |---|---|---|
-| `cmd/rptgo` | Flags, file/stdin I/O, record splitting, encodings, csv/json/html rendering, box filter, CRLF | Language semantics, typing, pagination |
-| `report` lexer/parser | Tokens, AST, defaults (width 80, length 66, margins, separator `\|`), env overrides | Execution, I/O |
-| `report` tipos | Parse-time checks (logical vs arithmetic, named expression names) | Runtime name resolution |
-| `report` interp | Row typing, evaluation, sort, break levels, page flow, aggregates | Output encoding, file formats |
-| `report` value/format/dates | Operators, null normalization, masks, date handling | Control flow |
+| `cmd/rptgo` | Flags, input reading, encodings, CSV/JSON/HTML/box output, exit codes | Language semantics, type conversion |
+| `internal/report` parser + `tipos.go` | Syntax, AST, static type/name checks | I/O, output formats |
+| `internal/report` interpreter | Conversion by input types, sort, events, aggregates, pagination, masks, dates | Reading files, flag validation |
+| `config.go` | Env lookup (`cfg`), clock (`RPT_NOW`) | Business logic |
 
 ### External integration points
 
 | System | Client/config | Notes |
 |---|---|---|
-| Filesystem / stdin / stdout | `os.ReadFile`, `os.Open`, `os.Create` in `main.go` | Script, data, template, logo, `-o` output |
-| Environment | `cfg`, `agora` in `config.go`; `cfgInt` in `parser.go` | `RPT_NOW` pins the clock (layouts `2006-01-02 15:04:05`, `2006-01-02 15:04`, RFC3339) |
-
-No async signals: single synchronous pass.
+| Filesystem / stdin / stdout | `os` in `main.go` | Script, data, template, logo, `-o` output |
+| Browser for PDF | none in code | HTML output is printed externally; script uses Chrome/Chromium + `pdftoppm` for README images |
 
 ## Related documents
 
 - [`project_overview.md`](project_overview.md) — purpose and macro flow
-- [`domain_rules.md`](domain_rules.md) — language semantics implemented in `internal/report`
-- [`api_contracts.md`](api_contracts.md) — CLI and template contract
+- [`tech_stack.md`](tech_stack.md) — language, tests, tooling
+- [`dependencies.md`](dependencies.md) — external and shared dependencies

@@ -8,33 +8,34 @@
 
 | Item | Value |
 |---|---|
-| Runtime | Native Go binary (CLI), `go build -o rptgo ./cmd/rptgo` |
-| Package manager | Go modules; `go.mod` module `rptgo`, no `go.sum`, no external deps |
+| Runtime | Native static CLI binary (`go build -o rptgo ./cmd/rptgo`) |
+| Package manager | Go modules, module `rptgo`, no `go.sum` |
 
 - **Language**: Go 1.25 (`go.mod`)
-- **Framework**: No primary framework (stdlib only: `encoding/csv`, `encoding/json`, `html`, `regexp`, `sort`, `time`)
+- **Framework**: No primary framework (stdlib only; `encoding/csv`, `encoding/json`, `regexp`, `sort`)
 
 ### Tests
 
 | Item | Value |
 |---|---|
-| Runner | Go stdlib `testing` (`go test ./...`) |
-| Assertion lib | None (manual `t.Fatalf`/`t.Errorf`) |
-| Mock lib | None |
-| Coverage tool | None configured |
+| Runner | `go test ./...` (stdlib `testing`; no CI or Makefile) |
+| Assertion lib | none (plain `testing`) |
+| Mock lib | none |
+| Coverage tool | none configured |
 | Golden update | `go test ./internal/report -run Golden -update` |
 | Benchmark | `BenchmarkConverte200k` (`internal/report/bench_test.go`) |
-| README check | `TestReadmeBlocosConferem`, `TestReadmeImagensExistem` (`cmd/rptgo/readme_test.go`) |
+| README check | `TestReadmeBlocosConferem` in `cmd/rptgo/readme_test.go` |
 
-No CI, Makefile or linter config.
+- Lint: none configured.
 
 ### External integrations
 
 | System | Client wiring |
 |---|---|
-| Chrome/Chromium, pdftoppm, Go | `scripts/render-readme-images.sh` only (dev tooling) |
+| Chrome/Chromium, `pdftoppm` | `scripts/render-readme-images.sh` only, not the binary |
 
 ## Related documents
 
+- [`architecture.md`](architecture.md) — package layout
+- [`coding_guidelines.md`](coding_guidelines.md) — code conventions
 - [`dependencies.md`](dependencies.md) — dependency inventory
-- [`coding_guidelines.md`](coding_guidelines.md) — conventions and test patterns

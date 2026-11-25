@@ -6,9 +6,22 @@
 
 ### Not applicable in this repository
 
-No persistence: no migrations directory, no ORM models, no schema files, no database driver (`go.mod` has no requirements). Input is a flat text file or stdin parsed at run time into in-memory rows: `Row = []Value` in column order of `input`, resolved by name through `Interp.colIdx` (`internal/report/interp.go`); `Value` is nil, int64, float64, string, time.Time or bool. Nothing is cached or written except the report output; sample data lives in `examples/*/` and `internal/report/testdata/golden/*.dat`.
+No persistence layer: no migrations directory, no ORM models, no schema files, no database driver (`go.mod` declares no dependencies). Data is read from a file or stdin and written to stdout or a file. In memory, a row is a positional `report.Row = []Value` aligned to the script's `input` columns (`internal/report/interp.go`).
+
+### In-memory row
+
+| Item | Detail |
+|---|---|
+| Row | `[]Value`, index = position in `Script.Input` |
+| Value | nil, int64, float64, string, `time.Time`, bool (`value.go`) |
+| InputCol | `Name`, `Type`, `Len`, `HasLen` (`ast.go`) |
+| Script | `Input`, `Width`, `Length`, `Top`, `Bottom`, `Left`, `Separator`, `Sort`, `Events`, `Variaveis`, `Nomeadas` |
+
+### Cache
+
+No cache. Interpreter state (`vars`, `pageno`, aggregate rows) lives for one run.
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — column types and null handling
-- [`architecture.md`](architecture.md) — interpreter layer that holds rows
+- [`domain_rules.md`](domain_rules.md) — type conversion rules
+- [`architecture.md`](architecture.md) — package layout
