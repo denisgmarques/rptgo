@@ -165,8 +165,8 @@ entre aspas. Datas saem como `AAAA-MM-DD`, que o `rptgo` lê de volta.
 ## Escolher colunas e ordenar
 
 - **CSV e texto delimitado** são lidos por posição: o `input` precisa declarar **todas** as colunas,
-  na ordem do arquivo. Os nomes das chaves ou colunas na saída são os do `input`.
-- **JSON** é lido por nome: o `input` pode ter só algumas chaves, em qualquer ordem. É também o jeito
+  na ordem do arquivo. Na saída, as chaves do JSON e as colunas do CSV têm os nomes do `input`.
+- **JSON** é lido por nome: o `input` pode ter só algumas chaves do JSON, em qualquer ordem. É também o jeito
   de tirar colunas de um CSV: converta para JSON e, num segundo comando, escolha as que quer.
 - Uma linha `sort limite desc` no script ordena a saída.
 

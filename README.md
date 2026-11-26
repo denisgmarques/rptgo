@@ -44,7 +44,7 @@ comando, com `-e`.
   como um CSV com outro delimitador e sem cabeçalho.
 - **Layout para impressão:** as seções `before`/`after`/`detail` geram o relatório paginado e o PDF
   (`--format text|html`).
-- **Quebras em cascata e acumuladores:** `before`/`after` em cada nível do `sort`, com `count`,
+- **Quebras em cascata e funções de agregação:** `before`/`after` em cada nível do `sort`, com `count`,
   `total`, `avg`, `min` e `max`, inclusive filtrados (`total(salary where active)`).
 - **Layout em colunas:** `print ... in col N using 'máscara'`, datas, moldes numéricos,
   texto quebrado por largura e caixas desenhadas com `+---+` (`--box`).
@@ -193,7 +193,7 @@ conferidos por testes. Os arquivos ficam em [`examples/`](examples/).
 | Exemplo | O que mostra |
 |---|---|
 | [Vendas por região e mês](examples/relatorio-vendas-regiao/README.md) | quebra em dois níveis com chave calculada; a mesma venda em texto, CSV, JSON e CSV do Excel; exportar para CSV/JSON; desempenho das fontes |
-| [Folha de pagamento por departamento](examples/payroll-by-department/README.md) | `if` com coluna `bool`, `where` nos agregados, PDF |
+| [Folha de pagamento por departamento](examples/payroll-by-department/README.md) | `if` com coluna `bool`, `where` nas funções de agregação, PDF |
 | [Pedidos de compra](examples/purchase-orders/README.md) | cliente > pedido > itens com subtotais, marcas condicionais e PDF com paginação |
 | [Fatura com logo e caixas](examples/invoice-html/README.md) | `--box`, template HTML, logo e variáveis, PDF |
 | [Feriados do ano, com um curl](examples/feriados-brasil/README.md) | o JSON de uma API vira o relatório, numa linha |

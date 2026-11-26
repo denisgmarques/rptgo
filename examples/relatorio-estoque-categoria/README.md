@@ -4,7 +4,7 @@
 
 Duas quebras em cascata (`categoria`, depois `subcategoria`), cada uma com a sua contagem, o seu
 total e, na subcategoria, a média. Mostra `count`, `total` e `avg` em níveis diferentes, expressões
-dentro dos agregados (`total(quantidade * preco)`) e o total geral.
+dentro das funções de agregação (`total(quantidade * preco)`) e o total geral.
 
 ## O script
 

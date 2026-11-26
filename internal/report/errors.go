@@ -57,6 +57,50 @@ func ErroLinhaScript(linha int, formato string, args ...any) error {
 	return &Error{msg: comLinha(msg, linha, FonteScript)}
 }
 
+// larguraTrecho é o máximo de caracteres de uma linha do script mostrados num erro.
+const larguraTrecho = 72
+
+// erroNaPalavra cria um erro de script com o marcador sob a palavra que começa na coluna col
+// (em runas, a partir de 0) da linha e ocupa tam runas. De uma linha longa sai só o trecho em
+// volta da palavra, com "..." nos lados cortados.
+func erroNaPalavra(linha, col, tam int, formato string, args ...any) error {
+	msg := fmt.Sprintf("linha %d: %s", linha, fmt.Sprintf(formato, args...))
+	if linha <= 0 || linha > len(FonteScript) {
+		return &Error{msg: msg}
+	}
+	texto := []rune(strings.TrimSuffix(FonteScript[linha-1], "\r"))
+	n := len(texto)
+	col = min(max(col, 0), n)
+	ini, fim := 0, n
+	if n > larguraTrecho {
+		ini = col
+		if tam < larguraTrecho { // centraliza a palavra no trecho
+			ini = max(0, min(col-(larguraTrecho-tam)/2, n-larguraTrecho))
+		}
+		fim = min(ini+larguraTrecho, n)
+	}
+	antes, depois := "", ""
+	if ini > 0 {
+		antes = "..."
+	}
+	if fim < n {
+		depois = "..."
+	}
+	prefixo := fmt.Sprintf("  %d | ", linha)
+	var marcador strings.Builder
+	marcador.WriteString(strings.Repeat(" ", len(prefixo)+len(antes)))
+	// os tabs são repetidos para o marcador alinhar com qualquer largura de tabulação
+	for _, c := range texto[ini:col] {
+		if c == '\t' {
+			marcador.WriteByte('\t')
+		} else {
+			marcador.WriteByte(' ')
+		}
+	}
+	marcador.WriteString(strings.Repeat("^", max(1, min(tam, fim-col))))
+	return &Error{msg: fmt.Sprintf("%s\n%s%s%s%s\n%s", msg, prefixo, antes, string(texto[ini:fim]), depois, marcador.String())}
+}
+
 // ErroLinhaDados cria um erro anexando a linha do ARQUIVO DE DADOS correspondente.
 func ErroLinhaDados(linha int, formato string, args ...any) error {
 	msg := fmt.Sprintf(formato, args...)

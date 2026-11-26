@@ -4,7 +4,8 @@
 
 Faturas em aberto por cliente, com o prazo em dias (`due - issued`, aritmética de datas), uma faixa de
 atraso (`current`, `overdue`, `OVERDUE 30+`) e o saldo do cliente. Mostra `not paid` dentro do `where`
-dos agregados e `print ... no newline` para o status ficar na mesma linha. A data de referência é fixa
+das funções de agregação e `print ... no newline` para o status ficar na mesma linha. A data de
+referência é fixa
 no script, e por isso ele só funciona com o `DATEFMT` padrão (`DD/MM/YY`).
 
 ## O script

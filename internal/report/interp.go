@@ -764,7 +764,7 @@ func (it *Interp) chave(r Row) []Value {
 	it.row = r
 	ks := make([]Value, len(it.S.Sort))
 	for i, sk := range it.S.Sort {
-		v, _ := it.ev(sk.Expr) // erro de expressão de sort já teria sido pego antes (coluna existe)
+		v, _ := it.ev(sk.Expr) // nomes e funções já conferidos no Parse; outro erro vira chave nula
 		ks[i] = v
 	}
 	it.row = salvo

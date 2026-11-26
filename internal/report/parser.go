@@ -1,47 +1,72 @@
 package report
 
 import (
+	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 var eventos = map[string]bool{"before": true, "after": true, "header": true, "footer": true, "detail": true}
+
+// tiposColuna são os tipos aceitos em 'input', na ordem em que aparecem na mensagem de erro.
+var tiposColuna = []string{"string", "text", "numeric", "integer", "long", "int", "float", "amount",
+	"double", "real", "huge", "date", "ldate", "time", "bool"}
+
+// inicioInstrucao são as palavras que começam uma instrução fora das seções: uma delas lida como
+// nome de coluna logo depois de uma vírgula indica uma vírgula sobrando no 'input'.
+var inicioInstrucao = map[string]bool{"input": true, "width": true, "length": true, "top": true,
+	"bottom": true, "left": true, "separator": true, "sort": true, "before": true, "after": true,
+	"header": true, "footer": true, "detail": true, "end": true}
 
 type parser struct {
 	t        []Token
 	p        int
 	nomeadas map[string]Expr // apelidos "<nome> expr" encontrados no sort e nos print
+	// para a conferência do 'sort': os nomes e funções usados, na ordem do script, e o trecho
+	// dessa lista que pertence a cada chave e a cada expressão nomeada
+	refs       []referencia
+	chaves     []faixa
+	faixaNomes map[string]faixa
+	virgula    int // token de instrução lido como coluna depois de uma vírgula (-1 se nenhum)
 }
 
 // registraNome guarda o apelido de uma expressão. Repetir o mesmo nome com a mesma expressão
 // é aceito; com outra expressão é erro. "<g> g" (o apelido é a própria coluna) não faz nada.
-func (ps *parser) registraNome(nome string, e Expr, linha int) error {
+// iNome é o token do nome e f o trecho de referências da expressão.
+func (ps *parser) registraNome(nome string, e Expr, iNome int, f faixa) error {
 	if c, ok := e.(ColExpr); ok && c.Name == nome {
 		return nil
 	}
-	if antiga, ok := ps.nomeadas[nome]; ok && !reflect.DeepEqual(antiga, e) {
-		return ErroLinhaScript(linha, "o nome '%s' já foi dado a outra expressão", nome)
+	if antiga, ok := ps.nomeadas[nome]; ok {
+		if !reflect.DeepEqual(antiga, e) {
+			return ps.erroEm(iNome, "o nome '%s' já foi dado a outra expressão", nome)
+		}
+		return nil
 	}
 	ps.nomeadas[nome] = e
+	ps.faixaNomes[nome] = f
 	return nil
 }
 
-// apelido lê "<nome>" se houver e devolve o nome ("" se não houver).
-func (ps *parser) apelido() (string, error) {
+// apelido lê "<nome>" se houver e devolve o nome ("" se não houver) e o token dele.
+func (ps *parser) apelido() (string, int, error) {
 	if !ps.isOp("<") {
-		return "", nil
+		return "", 0, nil
 	}
 	ps.nx()
+	i := ps.p
 	t := ps.nx()
 	if t.Kind != TokID {
-		return "", ErroLinhaScript(t.Line, "nome esperado entre < e >")
+		return "", 0, ps.erroEm(i, "nome esperado entre < e >")
 	}
 	if _, err := ps.op(">"); err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return t.Text, nil
+	return t.Text, i, nil
 }
 
 func (ps *parser) pk(k int) Token {
@@ -60,8 +85,41 @@ func (ps *parser) nx() Token {
 	return tk
 }
 
+// erroEm cria um erro apontando o token de índice i. No fim do script aponta a última palavra.
+func (ps *parser) erroEm(i int, formato string, args ...any) error {
+	msg := fmt.Sprintf(formato, args...)
+	if ps.virgula >= 0 && i == ps.virgula+1 {
+		msg += fmt.Sprintf("; '%s' foi lido como nome de coluna do input; pode haver uma vírgula sobrando", ps.t[ps.virgula].Src)
+	}
+	tk := ps.t[i]
+	if tk.Kind == TokEOF {
+		if len(ps.t) == 1 { // script sem nenhuma palavra: não há linha a mostrar
+			return Erro("linha %d: %s", tk.Line, msg)
+		}
+		tk = ps.t[len(ps.t)-2]
+	}
+	return erroNaPalavra(tk.Line, tk.Col, utf8.RuneCountInString(tk.Src), "%s", msg)
+}
+
+// errf cria um erro apontando o próximo token.
 func (ps *parser) errf(formato string, args ...any) error {
-	return ErroLinhaScript(ps.pk(0).Line, formato, args...)
+	return ps.erroEm(ps.p, formato, args...)
+}
+
+// cita devolve o token como foi escrito, entre aspas (uma string já tem as suas).
+func cita(tk Token) string {
+	if tk.Kind == TokStr {
+		return tk.Src
+	}
+	return "'" + tk.Src + "'"
+}
+
+// fimDoScript descreve onde a leitura parou quando o script acabou antes da hora.
+func (ps *parser) fimDoScript() string {
+	if len(ps.t) == 1 {
+		return "o script não tem nenhuma palavra"
+	}
+	return "chegou ao fim do script depois de " + cita(ps.t[len(ps.t)-2])
 }
 
 func (ps *parser) isKw(nomes ...string) bool {
@@ -118,16 +176,17 @@ func (ps *parser) op(o string) (Token, error) {
 }
 
 func (ps *parser) numInt() (int, error) {
+	i := ps.p
 	tk := ps.nx()
 	if tk.Kind != TokNum || !tk.IsInt {
-		return 0, ErroLinhaScript(tk.Line, "esperada uma constante inteira")
+		return 0, ps.erroEm(i, "esperada uma constante inteira")
 	}
 	return int(tk.Num), nil
 }
 
 // Parse interpreta a lista de tokens e devolve o Script completo.
 func Parse(toks []Token) (*Script, error) {
-	ps := &parser{t: toks, nomeadas: map[string]Expr{}}
+	ps := &parser{t: toks, nomeadas: map[string]Expr{}, faixaNomes: map[string]faixa{}, virgula: -1}
 	s := &Script{
 		Width:     80,
 		Length:    66,
@@ -200,13 +259,17 @@ func Parse(toks []Token) (*Script, error) {
 		}
 	}
 	if !terminou {
-		return nil, ps.errf("falta o 'end' que termina o script")
+		return nil, ps.errf("falta o 'end' que termina o script: %s", ps.fimDoScript())
 	}
+	ps.virgula = -1 // a leitura terminou: a dica da vírgula não vale para o que vem depois
 	if len(s.Input) == 0 {
 		return nil, Erro("o script precisa de uma instrução 'input'")
 	}
 	coletarVariaveis(s)
 	s.Nomeadas = ps.nomeadas
+	if err := ps.verificaOrdenacao(s); err != nil {
+		return nil, err
+	}
 	if err := verificaNomes(s); err != nil {
 		return nil, err
 	}
@@ -217,15 +280,29 @@ func Parse(toks []Token) (*Script, error) {
 }
 
 func (ps *parser) pInput(s *Script) error {
+	depoisDeVirgula := false
 	for {
+		i := ps.p
 		nome := ps.nx()
 		if nome.Kind != TokID {
-			return ps.errf("nome de coluna esperado no input")
+			return ps.erroEm(i, "nome de coluna esperado no input")
+		}
+		if depoisDeVirgula && inicioInstrucao[nome.Text] {
+			ps.virgula = i
 		}
 		col := InputCol{Name: nome.Text, Type: "string"}
 		if ps.isOp("[") {
 			ps.nx()
-			col.Type = ps.nx().Text
+			iTipo := ps.p
+			tipo := ps.nx()
+			if tipo.Kind == TokEOF || !slices.Contains(tiposColuna, tipo.Text) {
+				achado := "tipo desconhecido " + cita(tipo) + " na coluna " + cita(nome)
+				if tipo.Kind == TokEOF {
+					achado = "falta o tipo da coluna " + cita(nome) + ": " + ps.fimDoScript()
+				}
+				return ps.erroEm(iTipo, "%s; tipos válidos: %s", achado, strings.Join(tiposColuna, ", "))
+			}
+			col.Type = tipo.Text
 			if ps.pk(0).Kind == TokNum {
 				tk := ps.nx()
 				col.Len, col.HasLen = int(tk.Num), true
@@ -240,6 +317,7 @@ func (ps *parser) pInput(s *Script) error {
 		s.Input = append(s.Input, col)
 		if ps.isOp(",") {
 			ps.nx()
+			depoisDeVirgula = true
 			continue
 		}
 		break
@@ -249,17 +327,19 @@ func (ps *parser) pInput(s *Script) error {
 
 func (ps *parser) pSort(s *Script) error {
 	for {
-		linha := ps.pk(0).Line
-		nome, err := ps.apelido()
+		nome, iNome, err := ps.apelido()
 		if err != nil {
 			return err
 		}
+		ini := len(ps.refs)
 		e, err := ps.expr()
 		if err != nil {
 			return err
 		}
+		f := faixa{ini, len(ps.refs)}
+		ps.chaves = append(ps.chaves, f)
 		if nome != "" {
-			if err := ps.registraNome(nome, e, linha); err != nil {
+			if err := ps.registraNome(nome, e, iNome, f); err != nil {
 				return err
 			}
 		}
@@ -284,17 +364,19 @@ func (ps *parser) pSort(s *Script) error {
 }
 
 func (ps *parser) pEvento(s *Script) error {
+	iEv := ps.p
 	ev := ps.nx().Text
 	chave := EventKey{Kind: ev}
 	if ev == "before" || ev == "after" {
+		i := ps.p
 		alvo := ps.nx()
 		if alvo.Kind != TokID {
-			return ps.errf("nome da seção esperado")
+			return ps.erroEm(i, "nome da seção esperado")
 		}
 		chave.Target = alvo.Text
 	}
 	if _, existe := s.Events[chave]; existe {
-		return ps.errf("a seção '%s' só pode aparecer uma vez", ev)
+		return ps.erroEm(iEv, "a seção '%s' só pode aparecer uma vez", ev)
 	}
 	corpo, err := ps.listaStmts()
 	if err != nil {
@@ -326,11 +408,11 @@ func (ps *parser) listaStmts() ([]Stmt, error) {
 
 func (ps *parser) stmtOuBloco() ([]Stmt, error) {
 	if ps.isKw("begin") {
-		ps.nx()
+		linha := ps.nx().Line
 		var out []Stmt
 		for !ps.isKw("end") {
 			if ps.pk(0).Kind == TokEOF {
-				return nil, ps.errf("falta 'end' do bloco 'begin'")
+				return nil, ps.errf("falta 'end' do bloco 'begin' aberto na linha %d: %s", linha, ps.fimDoScript())
 			}
 			st, err := ps.stmt()
 			if err != nil {
@@ -373,14 +455,14 @@ func (ps *parser) stmt() (Stmt, error) {
 			if _, err := ps.kw("no"); err != nil {
 				return nil, err
 			}
-			w := ps.nx().Text
-			switch w {
+			i := ps.p
+			switch ps.nx().Text {
 			case "footer":
 				nf = true
 			case "header":
 				nh = true
 			default:
-				return nil, ps.errf("'footer' ou 'header' esperado")
+				return nil, ps.erroEm(i, "'footer' ou 'header' esperado")
 			}
 		}
 		return PageStmt{NoFooter: nf, NoHeader: nh}, nil
@@ -393,9 +475,10 @@ func (ps *parser) stmt() (Stmt, error) {
 		return NeedStmt{N: v}, nil
 	case "set":
 		ps.nx()
+		i := ps.p
 		nome := ps.nx()
 		if nome.Kind != TokID {
-			return nil, ps.errf("nome de variável esperado")
+			return nil, ps.erroEm(i, "nome de variável esperado")
 		}
 		if _, err := ps.kw("to"); err != nil {
 			return nil, err
@@ -447,17 +530,17 @@ func (ps *parser) stmt() (Stmt, error) {
 func (ps *parser) pPrint() (Stmt, error) {
 	var itens []PrintItem
 	for {
-		linha := ps.pk(0).Line
-		nome, err := ps.apelido()
+		nome, iNome, err := ps.apelido()
 		if err != nil {
 			return nil, err
 		}
+		ini := len(ps.refs)
 		e, err := ps.expr()
 		if err != nil {
 			return nil, err
 		}
 		if nome != "" {
-			if err := ps.registraNome(nome, e, linha); err != nil {
+			if err := ps.registraNome(nome, e, iNome, faixa{ini, len(ps.refs)}); err != nil {
 				return nil, err
 			}
 		}
@@ -634,8 +717,9 @@ func (ps *parser) eUn() (Expr, error) {
 	}
 	// operador de substring (posfixo): texto substr [início-fim]
 	for ps.isKw("substr") {
-		linha := ps.nx().Line
-		sub, err := ps.substrEspec(linha)
+		i := ps.p
+		ps.nx()
+		sub, err := ps.substrEspec(i)
 		if err != nil {
 			return nil, err
 		}
@@ -646,33 +730,37 @@ func (ps *parser) eUn() (Expr, error) {
 }
 
 // substrEspec lê "[início-fim]" (inteiros, início >= 1 e fim >= início).
-func (ps *parser) substrEspec(linha int) (SubstrExpr, error) {
+// iSubstr é o token da palavra 'substr'.
+func (ps *parser) substrEspec(iSubstr int) (SubstrExpr, error) {
 	var sub SubstrExpr
 	if _, err := ps.op("["); err != nil {
 		return sub, err
 	}
+	i := ps.p
 	ini := ps.nx()
 	if ini.Kind != TokNum || !ini.IsInt {
-		return sub, ErroLinhaScript(linha, "substr espera [início-fim] com números inteiros")
+		return sub, ps.erroEm(i, "substr espera [início-fim] com números inteiros")
 	}
 	if _, err := ps.op("-"); err != nil {
 		return sub, err
 	}
+	i = ps.p
 	fim := ps.nx()
 	if fim.Kind != TokNum || !fim.IsInt {
-		return sub, ErroLinhaScript(linha, "substr espera [início-fim] com números inteiros")
+		return sub, ps.erroEm(i, "substr espera [início-fim] com números inteiros")
 	}
 	if _, err := ps.op("]"); err != nil {
 		return sub, err
 	}
 	sub.Start, sub.End = int(ini.Num), int(fim.Num)
 	if sub.Start < 1 || sub.End < sub.Start {
-		return sub, ErroLinhaScript(linha, "substr [%d-%d] inválido: o início começa em 1 e o fim não pode ser menor que o início", sub.Start, sub.End)
+		return sub, ps.erroEm(iSubstr, "substr [%d-%d] inválido: o início começa em 1 e o fim não pode ser menor que o início", sub.Start, sub.End)
 	}
 	return sub, nil
 }
 
 func (ps *parser) ePrim() (Expr, error) {
+	i := ps.p
 	tk := ps.nx()
 	switch tk.Kind {
 	case TokNum:
@@ -687,13 +775,13 @@ func (ps *parser) ePrim() (Expr, error) {
 	case TokHora:
 		h, _, err := ParseHora(tk.Text)
 		if err != nil {
-			return nil, ErroLinhaScript(tk.Line, "%v", err)
+			return nil, ps.erroEm(i, "%v", err)
 		}
 		return ConstExpr{Val: h}, nil
 	case TokData:
 		d, ok, err := ParseData(tk.Text)
 		if err != nil {
-			return nil, err
+			return nil, ps.erroEm(i, "%v", err)
 		}
 		if !ok {
 			return ConstExpr{Val: nil}, nil
@@ -716,6 +804,7 @@ func (ps *parser) ePrim() (Expr, error) {
 			return ConstExpr{Val: nil}, nil
 		}
 		if ps.isOp("(") {
+			ps.refs = append(ps.refs, referencia{nome: v, chamada: true, tok: i})
 			ps.nx()
 			var args []Expr
 			star := false
@@ -767,9 +856,13 @@ func (ps *parser) ePrim() (Expr, error) {
 		case "pageno":
 			return PageNoExpr{}, nil
 		}
+		ps.refs = append(ps.refs, referencia{nome: v, tok: i})
 		return ColExpr{Name: v}, nil
 	}
-	return nil, ErroLinhaScript(tk.Line, "expressão inválida")
+	if tk.Kind == TokEOF {
+		return nil, ps.erroEm(i, "expressão inválida: %s", ps.fimDoScript())
+	}
+	return nil, ps.erroEm(i, "expressão inválida: encontrado %s", cita(tk))
 }
 
 // coletarVariaveis percorre todas as seções marcando quais nomes recebem 'set' em algum

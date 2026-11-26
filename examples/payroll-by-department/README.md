@@ -3,7 +3,7 @@
 [← Exemplos](../../README.md#exemplos) · [Referência da linguagem](../../REFERENCIA.md)
 
 Uma quebra (`dept`), só os funcionários ativos (`if active then`) e, no fim de cada departamento,
-a quantidade, o total, a média e o maior salário, usando `where` nos agregados. Mostra a coluna `bool`,
+a quantidade, o total, a média e o maior salário, usando `where` nas funções de agregação. Mostra a coluna `bool`,
 datas com ano de 4 dígitos (`ldate`) e as máscaras numéricas.
 
 ## O script

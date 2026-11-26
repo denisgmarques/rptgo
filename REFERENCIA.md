@@ -173,8 +173,8 @@ páginas, e o formato HTML não preenche páginas.
 ## 3. Colunas de entrada e tipos (`input`)
 
 A instrução `input` declara, **na ordem em que aparecem em cada registro**, as colunas dos dados.
-Cada coluna é `nome [tipo tamanho]`, separadas por vírgula. Sem `[...]` o tipo é `string`. O
-tamanho só importa para `string` (e é opcional nas datas e horas). A palavra `sorted` depois de
+Cada coluna é `nome [tipo tamanho]`, separadas por vírgula. Sem `[...]` o tipo é `string`, e um
+tipo fora da tabela abaixo é erro de script (seção 12). O tamanho só importa para `string` (e é opcional nas datas e horas). A palavra `sorted` depois de
 uma coluna é aceita e ignorada.
 
 | Tipo | O que guarda | Observações |
@@ -534,6 +534,11 @@ Mes 2
 Chaves que são só uma coluna não precisam de nome: `sort regiao, produto` já cria os níveis
 `regiao` e `produto`. A forma `<regiao> regiao` também é aceita, mas é redundante.
 
+**O que uma chave pode usar:** colunas do `input`, variáveis de `set`, expressões nomeadas, `today`,
+`hour`, `pageno`, `null` e as funções `dow`, `mdy` e `index`. Um nome desconhecido, outra função ou
+uma função de agregação (`total`, `count`...) é erro de script, apontado antes da leitura dos dados
+(seção 12).
+
 ---
 
 ## 5. Seções do relatório
@@ -551,8 +556,8 @@ pode aparecer uma vez no script.
 | `before <chave>` | quando começa um grupo novo da chave (inclusive o primeiro) | o primeiro registro do grupo |
 | `after <chave>` | quando o grupo da chave termina | o último registro do grupo |
 
-`<chave>` é o nome de um nível do `sort` (seção 4). As funções de totalização (`total`, `count`,
-`avg`...) só calculam nas seções `after`, onde enxergam todos os registros do grupo (seção 8).
+`<chave>` é o nome de um nível do `sort` (seção 4). As funções de agregação (`count`, `total`,
+`avg`, `min` e `max`) só calculam nas seções `after`, onde enxergam todos os registros do grupo (seção 8).
 
 **A ordem em cascata.** Quando uma chave de nível k muda, rodam primeiro os `after` dos níveis de
 dentro para fora, até k, e depois os `before` de k para dentro. O exemplo imprime o nome de cada
@@ -980,7 +985,7 @@ Dora   baixo
 ## 7. Expressões
 
 Uma expressão calcula um valor a partir de constantes, colunas, variáveis, operadores e funções.
-Aparece em `print`, `set`, `if`, `sort`, no `where` dos agregados e nos argumentos das funções.
+Aparece em `print`, `set`, `if`, `sort`, no `where` das funções de agregação e nos argumentos das funções.
 
 ### 7.1 Constantes
 
@@ -1161,7 +1166,7 @@ uma expressão aritmética **não** pode ser usada onde se espera uma condição
 
 - a condição de um `if`;
 - os operandos de `and`, `or` e `not`;
-- o `where` de um agregado (seção 8).
+- o `where` de uma função de agregação (seção 8).
 
 Uma coluna `bool` é lógica e pode ser usada direto. Uma variável criada com `set` não tem tipo
 fixo e é aceita em qualquer lugar. O erro aparece **antes** de o relatório rodar:
@@ -1289,8 +1294,8 @@ h >= 08:00             1
 
 Um valor nulo imprime em branco. Em uma conta, o nulo conta como 0; numa comparação, como o
 valor "vazio" do tipo do outro lado (0, texto vazio, data mínima). Para testar nulidade use
-`is null` / `is not null`, que também consideram nulo o texto vazio. Os agregados ignoram nulos
-(seção 8).
+`is null` / `is not null`, que também consideram nulo o texto vazio. As funções de agregação
+ignoram nulos (seção 8).
 
 <!-- script -->
 ```text
@@ -1326,7 +1331,7 @@ t is null          1
 
 `<nome> expressão` dá um **nome** a uma expressão, no `sort` (seção 4) ou num `print`. Depois de
 nomeada, o nome pode ser usado nas expressões seguintes como se fosse uma coluna: em outros
-`print`, em condições, em agregados. O nome tem o tipo da expressão que ele nomeia. Repetir o
+`print`, em condições, em funções de agregação. O nome tem o tipo da expressão que ele nomeia. Repetir o
 mesmo nome só é aceito com a mesma expressão, e o nome não pode ser o de uma coluna nem de uma
 variável.
 
@@ -1360,9 +1365,9 @@ lapis    8.50
 
 ## 8. Funções
 
-### 8.1 Agregados: `count`, `total`, `avg`, `min`, `max`
+### 8.1 Funções de agregação: `count`, `total`, `avg`, `min`, `max`
 
-Os agregados calculam sobre o **grupo** de registros nas seções `after <chave>` (o grupo que acabou
+As funções de agregação calculam sobre o **grupo** de registros nas seções `after <chave>` (o grupo que acabou
 de fechar) e `after report` (todos os registros). Cada grupo começa do zero. Em `detail` e nas seções
 `before` não existe um grupo, e o resultado é vazio (`0`); em `header` e `footer` o programa avisa
 com um erro.
@@ -1836,9 +1841,74 @@ cabeçalho que está no `header`, rode sem a opção e tire a cópia.
 ## 12. Mensagens de erro comuns
 
 Os erros de sintaxe e de tipo aparecem antes de o relatório rodar; os de dados e os de execução,
-quando o registro problemático é lido ou calculado. Todos mostram a linha envolvida.
+quando o registro problemático é lido ou calculado. Quase todos mostram a linha envolvida.
 
-**Nome desconhecido** (uma coluna ou variável que não existe):
+Num erro de script, o marcador `^` fica sob a palavra em que o problema foi encontrado. De uma linha
+com mais de 72 caracteres sai só o trecho em volta dela, com `...` no lado cortado.
+
+**Tipo desconhecido no `input`:**
+
+<!-- script -->
+```text
+input nome, valor [numerc]
+detail
+   print nome, valor
+end
+```
+<!-- data -->
+```text
+Ana|10
+```
+<!-- error -->
+```text
+rptgo: linha 1: tipo desconhecido 'numerc' na coluna 'valor'; tipos válidos: string, text, numeric, integer, long, int, float, amount, double, real, huge, date, ldate, time, bool
+  1 | input nome, valor [numerc]
+                         ^^^^^^
+```
+
+**Nome desconhecido no `sort`:**
+
+<!-- script -->
+```text
+input idade [numeric]
+sort idades
+detail
+   print idade
+end
+```
+<!-- data -->
+```text
+30
+```
+<!-- error -->
+```text
+rptgo: linha 2: nome desconhecido no sort: 'idades'
+  2 | sort idades
+           ^^^^^^
+```
+
+**Vírgula sobrando no `input`.** Como uma coluna pode ter o nome de uma instrução, a palavra depois da
+vírgula é lida como coluna, e a mensagem avisa:
+
+<!-- script -->
+```text
+input nome, idade [numeric],
+detail
+   print nome
+end
+```
+<!-- data -->
+```text
+Ana|30
+```
+<!-- error -->
+```text
+rptgo: linha 3: instrução inválida fora de seção: 'print'; 'detail' foi lido como nome de coluna do input; pode haver uma vírgula sobrando
+  3 |    print nome
+         ^^^^^
+```
+
+**Nome desconhecido** (uma coluna ou variável que não existe) num comando:
 
 <!-- script -->
 ```text
@@ -1920,7 +1990,7 @@ end
 rptgo: divisão por zero
 ```
 
-**Agregado numa seção onde não há grupo** (`header` e `footer`; em `detail` ele devolve 0):
+**Função de agregação numa seção onde não há grupo** (`header` e `footer`; em `detail` ele devolve 0):
 
 <!-- script -->
 ```text
@@ -1957,9 +2027,9 @@ end
 ```
 <!-- error -->
 ```text
-rptgo: linha 5: a seção 'detail' só pode aparecer uma vez
-  5 |    print n
-      ^^^^^^^
+rptgo: linha 4: a seção 'detail' só pode aparecer uma vez
+  4 | detail
+      ^^^^^^
 ```
 <!-- script -->
 ```text
