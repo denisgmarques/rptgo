@@ -1923,7 +1923,12 @@ end
 ```
 <!-- error -->
 ```text
-rptgo: nome desconhecido: 'total'
+rptgo: nome desconhecido: 'total' na seção detail
+script, linha 3:
+  3 |    print n, total
+                  ^^^^^
+dados, linha 1 (registro 1):
+  1 | 5
 ```
 
 **Valor inválido nos dados** (o texto não é do tipo da coluna), com o número do registro:
@@ -1987,7 +1992,13 @@ end
 ```
 <!-- error -->
 ```text
-rptgo: divisão por zero
+rptgo: divisão por zero na seção detail
+script, linha 3:
+  3 |    print 10 / n
+               ^^^^^^
+conta: 10 / n, com n = 0
+dados, linha 1 (registro 1):
+  1 | 0
 ```
 
 **Função de agregação numa seção onde não há grupo** (`header` e `footer`; em `detail` ele devolve 0):
@@ -2007,7 +2018,12 @@ end
 ```
 <!-- error -->
 ```text
-rptgo: a função total() só pode ser usada em 'after sort_key' e 'after report'
+rptgo: a função total() só pode ser usada em 'after sort_key' e 'after report' na seção header
+script, linha 3:
+  3 |    print 'total ate aqui:', total(n)
+                                  ^^^^^
+dados, linha 1 (registro 1):
+  1 | 5
 ```
 
 **Seção repetida** e **`before`/`after` de um nível que não existe no `sort`:**

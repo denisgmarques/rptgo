@@ -255,12 +255,12 @@ func aritm(op string, a, b Value) (Value, error) {
 				return ai * bi, nil
 			case "/":
 				if bi == 0 {
-					return nil, Erro("divisão por zero")
+					return nil, erroDivisaoPorZero()
 				}
 				return ai / bi, nil // divisão inteira: trunca a parte fracionária
 			case "%":
 				if bi == 0 {
-					return nil, Erro("divisão por zero")
+					return nil, erroDivisaoPorZero()
 				}
 				return ai % bi, nil
 			}
@@ -276,12 +276,12 @@ func aritm(op string, a, b Value) (Value, error) {
 		return fa * fb, nil
 	case "/":
 		if fb == 0 {
-			return nil, Erro("divisão por zero")
+			return nil, erroDivisaoPorZero()
 		}
 		return fa / fb, nil
 	case "%":
 		if fb == 0 {
-			return nil, Erro("divisão por zero")
+			return nil, erroDivisaoPorZero()
 		}
 		return math.Mod(fa, fb), nil
 	}

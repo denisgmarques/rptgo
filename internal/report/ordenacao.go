@@ -52,3 +52,13 @@ func (ps *parser) verificaOrdenacao(s *Script) error {
 	}
 	return nil
 }
+
+// erroComparacaoSort completa o erro de uma chave com dois valores que não se comparam: o trecho
+// da chave no script e os registros dos dois valores.
+func erroComparacaoSort(err error, sk SortKey, a, b Row) error {
+	if e, ok := err.(*Error); ok {
+		e.msg = "no sort: " + e.msg
+		e.marcado, e.pos, e.linha, e.outra = true, sk.pos, a, b
+	}
+	return naSecao(err, secaoSort)
+}

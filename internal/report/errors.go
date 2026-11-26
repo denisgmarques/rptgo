@@ -69,8 +69,17 @@ func comLinha(msg string, linha int, fonte []string) string {
 
 // Error é o único tipo de erro do pacote: erros de sintaxe e de execução são tratados igual.
 type Error struct {
-	msg    string
-	deTipo bool // valor de tipo errado para a operação: para o relatório mesmo numa chave do sort
+	msg     string
+	deTipo  bool // valor de tipo errado para a operação: para o relatório mesmo numa chave do sort
+	divisao bool // divisão ou resto por zero: também para o relatório numa chave do sort
+
+	// contexto de um erro de execução (contexto.go)
+	marcado   bool     // o lugar onde o erro nasceu já foi anotado
+	pos       posicao  // trecho do script que falhou
+	linha     Row      // registro que estava sendo lido
+	outra     Row      // o segundo registro de uma comparação do sort
+	operandos [2]Value // valores dos operandos de uma divisão por zero
+	secao     string   // seção que estava rodando
 }
 
 func (e *Error) Error() string { return e.msg }
@@ -83,6 +92,11 @@ func Erro(formato string, args ...any) error {
 // erroDeTipo cria um erro de valor com o tipo errado para a operação.
 func erroDeTipo(formato string, args ...any) error {
 	return &Error{msg: fmt.Sprintf(formato, args...), deTipo: true}
+}
+
+// erroDivisaoPorZero cria o erro de um '/' ou '%' com divisor zero.
+func erroDivisaoPorZero() error {
+	return &Error{msg: "divisão por zero", divisao: true}
 }
 
 // ErroLinhaScript cria um erro anexando a linha do SCRIPT (.rp) correspondente.

@@ -55,6 +55,9 @@ type Interp struct {
 
 	agora time.Time
 	rows  []Row
+	// numeros guarda o número na entrada de cada registro de rows depois do sort; nil enquanto
+	// rows está na ordem da entrada
+	numeros []int
 }
 
 // NovoInterp converte os registros de entrada e devolve um Interp pronto pra Run().
@@ -205,13 +208,13 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		if e, ok := it.S.Nomeadas[x.Name]; ok {
 			// expressão com apelido: usada como se fosse mais uma coluna
 			if it.profNome >= 32 {
-				return nil, Erro("a expressão nomeada '%s' refere-se a si mesma", x.Name)
+				return nil, it.marcaOrigem(Erro("a expressão nomeada '%s' refere-se a si mesma", x.Name), x.pos)
 			}
 			it.profNome++
 			defer func() { it.profNome-- }()
 			return it.ev(e)
 		}
-		return nil, Erro("nome desconhecido: '%s'", x.Name)
+		return nil, it.marcaOrigem(Erro("nome desconhecido: '%s'", x.Name), x.pos)
 	case TodayExpr:
 		ano, mes, dia := it.agora.Date()
 		return time.Date(ano, mes, dia, 0, 0, 0, 0, it.agora.Location()), nil
@@ -293,7 +296,7 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		}
 		r, err := comparar(x.Op, a, b)
 		if err != nil {
-			return nil, err
+			return nil, it.marcaOrigem(err, x.pos)
 		}
 		if r {
 			return int64(1), nil
@@ -308,7 +311,11 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		return aritm(x.Op, a, b)
+		r, err := aritm(x.Op, a, b)
+		if err != nil {
+			return nil, it.marcaConta(err, x.pos, a, b)
+		}
+		return r, nil
 	case SubstrExpr:
 		v, err := it.ev(x.X)
 		if err != nil {
@@ -319,7 +326,7 @@ func (it *Interp) ev(e Expr) (Value, error) {
 		}
 		s, ok := v.(string)
 		if !ok {
-			return nil, Erro("substr só pode ser usado com texto")
+			return nil, it.marcaOrigem(Erro("substr só pode ser usado com texto"), x.pos)
 		}
 		r := []rune(s)
 		if x.Start > len(r) {
@@ -340,7 +347,7 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 	switch e.Name {
 	case "count", "total", "avg", "min", "max":
 		if !it.aggAtivo {
-			return nil, Erro("a função %s() só pode ser usada em 'after sort_key' e 'after report'", e.Name)
+			return nil, it.marcaOrigem(Erro("a função %s() só pode ser usada em 'after sort_key' e 'after report'", e.Name), e.pos)
 		}
 		salvo := it.row
 		var vals []Value
@@ -433,7 +440,7 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 		}
 		d, ok := args[0].(time.Time)
 		if !ok {
-			return nil, erroDeTipo("a função dow() espera uma data")
+			return nil, it.marcaOrigem(erroDeTipo("a função dow() espera uma data"), e.pos)
 		}
 		return int64(d.Weekday()), nil // time.Weekday: 0=domingo..6=sábado, igual a isoweekday()%7
 	case "mdy":
@@ -442,7 +449,7 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 		}
 		d, ok := args[0].(time.Time)
 		if !ok {
-			return nil, erroDeTipo("a função mdy() espera uma data")
+			return nil, it.marcaOrigem(erroDeTipo("a função mdy() espera uma data"), e.pos)
 		}
 		switch int(paraFloat(args[1])) {
 		case 0:
@@ -460,7 +467,7 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 		}
 		return "", nil
 	}
-	return nil, Erro("'%s' é um nome de função desconhecido", e.Name)
+	return nil, it.marcaOrigem(Erro("'%s' é um nome de função desconhecido", e.Name), e.pos)
 }
 
 // ---------------------------------------------------------------- saída / páginas
@@ -472,20 +479,25 @@ func (it *Interp) cap() int {
 	return it.S.Length - it.S.Top - it.S.Bottom - it.altRodape
 }
 
-func (it *Interp) emite(texto string) {
+// emite acrescenta uma linha à página. emite, flush, fechaPagina e novaPagina podem rodar o
+// 'footer' e o 'header', e devolvem o primeiro erro deles: quem chama para na hora.
+func (it *Interp) emite(texto string) error {
 	if it.captura != nil {
 		*it.captura = append(*it.captura, texto)
-		return
+		return nil
 	}
 	if len(it.corpo) >= it.cap() && !it.quebrando {
-		it.novaPagina(false, false)
+		if err := it.novaPagina(false, false); err != nil {
+			return err
+		}
 	}
 	it.corpo = append(it.corpo, texto)
+	return nil
 }
 
-func (it *Interp) flush() {
+func (it *Interp) flush() error {
 	if len(it.buf) == 0 && len(it.extras) == 0 {
-		return
+		return nil
 	}
 	buf, extras := it.buf, it.extras
 	it.buf, it.extras, it.fimCol = nil, nil, 1
@@ -496,12 +508,17 @@ func (it *Interp) flush() {
 	limite := it.S.Width - it.S.Left
 	if len(buf) > 0 {
 		txt := strings.TrimRight(string(buf), " ")
-		it.emite(esq + recortaRunas(txt, limite))
+		if err := it.emite(esq + recortaRunas(txt, limite)); err != nil {
+			return err
+		}
 	}
 	for _, ex := range extras {
 		pad := strings.Repeat(" ", ex.Col-1) + ex.Texto
-		it.emite(esq + recortaRunas(pad, limite))
+		if err := it.emite(esq + recortaRunas(pad, limite)); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func recortaRunas(s string, limite int) string {
@@ -515,13 +532,19 @@ func recortaRunas(s string, limite int) string {
 	return string(r)
 }
 
-func (it *Interp) fechaPagina(semRodape bool) {
-	it.flush()
-	if _, temRodape := it.S.Events[EventKey{Kind: "footer"}]; temRodape && !semRodape {
+func (it *Interp) fechaPagina(semRodape bool) error {
+	if err := it.flush(); err != nil {
+		return err
+	}
+	if corpo, ok := it.S.Events[EventKey{Kind: "footer"}]; ok && !semRodape {
 		var cap []string
 		it.captura = &cap
-		it.exec(it.S.Events[EventKey{Kind: "footer"}])
-		it.flush()
+		if err := it.rodaSecao(EventKey{Kind: "footer"}, corpo); err != nil {
+			return err
+		}
+		if err := it.flush(); err != nil {
+			return err
+		}
 		it.captura = nil
 		falta := it.cap() - len(it.corpo)
 		for i := 0; i < falta; i++ {
@@ -541,21 +564,31 @@ func (it *Interp) fechaPagina(semRodape bool) {
 	}
 	it.paginas = append(it.paginas, pag)
 	it.corpo = nil
+	return nil
 }
 
-func (it *Interp) novaPagina(semRodape, semCabecalho bool) {
-	it.flush()
+func (it *Interp) novaPagina(semRodape, semCabecalho bool) error {
+	if err := it.flush(); err != nil {
+		return err
+	}
 	if len(it.corpo) == 0 {
-		return
+		return nil
 	}
 	it.quebrando = true
-	it.fechaPagina(semRodape)
+	if err := it.fechaPagina(semRodape); err != nil {
+		return err
+	}
 	it.pageno++
 	if corpo, ok := it.S.Events[EventKey{Kind: "header"}]; ok && !semCabecalho {
-		it.exec(corpo)
-		it.flush()
+		if err := it.rodaSecao(EventKey{Kind: "header"}, corpo); err != nil {
+			return err
+		}
+		if err := it.flush(); err != nil {
+			return err
+		}
 	}
 	it.quebrando = false
+	return nil
 }
 
 // ---------------------------------------------------------------- comandos
@@ -568,16 +601,26 @@ func (it *Interp) exec(stmts []Stmt) error {
 				return err
 			}
 		case SkipStmt:
-			it.flush()
+			if err := it.flush(); err != nil {
+				return err
+			}
 			for i := 0; i < x.N; i++ {
-				it.emite("")
+				if err := it.emite(""); err != nil {
+					return err
+				}
 			}
 		case PageStmt:
-			it.novaPagina(x.NoFooter, x.NoHeader)
+			if err := it.novaPagina(x.NoFooter, x.NoHeader); err != nil {
+				return err
+			}
 		case NeedStmt:
-			it.flush()
+			if err := it.flush(); err != nil {
+				return err
+			}
 			if it.cap()-len(it.corpo) < x.N {
-				it.novaPagina(false, false)
+				if err := it.novaPagina(false, false); err != nil {
+					return err
+				}
 			}
 		case SetStmt:
 			v, err := it.ev(x.Expr)
@@ -662,8 +705,8 @@ func (it *Interp) printStmt(st PrintStmt) error {
 			}
 		}
 		linhas, err := it.formata(v, mascara, it.ehLdate(item.Expr))
-		if err != nil {
-			return err
+		if err != nil { // só a máscara faz a formatação falhar
+			return it.marcaOrigem(err, item.posMascara)
 		}
 		if v == nil && it.ehColBool(item.Expr) {
 			linhas = []string{"***"}
@@ -695,7 +738,7 @@ func (it *Interp) printStmt(st PrintStmt) error {
 			}
 		}
 		if col < 1 {
-			return Erro("número de coluna inválido: %d", col)
+			return it.marcaOrigem(Erro("número de coluna inválido: %d", col), item.posCol)
 		}
 		ini := col - 1
 		tr := []rune(texto)
@@ -714,7 +757,7 @@ func (it *Interp) printStmt(st PrintStmt) error {
 		}
 	}
 	if !st.NoNewline {
-		it.flush()
+		return it.flush()
 	}
 	return nil
 }
@@ -775,8 +818,11 @@ func (it *Interp) chave(r Row) ([]Value, error) {
 	ks := make([]Value, len(it.S.Sort))
 	for i, sk := range it.S.Sort {
 		v, err := it.ev(sk.Expr)
-		if e, ok := err.(*Error); ok && e.deTipo {
-			return nil, Erro("no sort: %v", err)
+		if e, ok := err.(*Error); ok && (e.deTipo || e.divisao) {
+			if e.deTipo {
+				e.msg = "no sort: " + e.msg
+			}
+			return nil, naSecao(e, secaoSort)
 		}
 		ks[i] = v // nos outros erros a chave fica nula (nomes e funções já foram conferidos no Parse)
 	}
@@ -788,7 +834,7 @@ func (it *Interp) chave(r Row) ([]Value, error) {
 // paginação. É a base das saídas CSV/JSON, que só consultam 'input' e 'sort'.
 func (it *Interp) LinhasOrdenadas() ([]Row, error) {
 	if err := it.ordena(); err != nil {
-		return nil, err
+		return nil, it.relata(err)
 	}
 	return it.rows, nil
 }
@@ -800,6 +846,7 @@ func (it *Interp) ordena() error {
 	type par struct {
 		k []Value
 		r Row
+		n int // número do registro na entrada
 	}
 	pares := make([]par, len(it.rows))
 	for i, r := range it.rows {
@@ -807,7 +854,7 @@ func (it *Interp) ordena() error {
 		if err != nil {
 			return err
 		}
-		pares[i] = par{k: k, r: r}
+		pares[i] = par{k: k, r: r, n: it.numeroNaPosicao(i)}
 	}
 	var errComparacao error // chaves de tipos que não se comparam (data e número)
 	sort.SliceStable(pares, func(i, j int) bool {
@@ -826,7 +873,7 @@ func (it *Interp) ordena() error {
 			default:
 				menor, err := comparar("<", a, b)
 				if err != nil && errComparacao == nil {
-					errComparacao = Erro("no sort: %v", err)
+					errComparacao = erroComparacaoSort(err, sk, pares[i].r, pares[j].r)
 				}
 				maior, _ := comparar(">", a, b)
 				switch {
@@ -847,8 +894,9 @@ func (it *Interp) ordena() error {
 		}
 		return false
 	})
+	it.numeros = make([]int, len(pares))
 	for i, p := range pares {
-		it.rows[i] = p.r
+		it.rows[i], it.numeros[i] = p.r, p.n
 	}
 	return errComparacao
 }
@@ -868,10 +916,12 @@ func (it *Interp) executa() error {
 		it.row, it.pageno = it.rows[0], 1
 		var cap []string
 		it.captura = &cap
-		if err := it.exec(corpo); err != nil {
+		if err := it.rodaSecao(EventKey{Kind: "footer"}, corpo); err != nil {
 			return err
 		}
-		it.flush()
+		if err := it.flush(); err != nil {
+			return err
+		}
 		it.altRodape = len(cap)
 		it.captura, it.vars, it.pageno = nil, varsSalvas, 0
 	}
@@ -890,13 +940,14 @@ func (it *Interp) executa() error {
 		corpo, ok := it.S.Events[EventKey{Kind: tipo, Target: nome}]
 		return corpo, ok
 	}
-	roda := func(corpo []Stmt, ok bool, linha Row, grupo []Row) error {
+	roda := func(tipo, nome string, linha Row, grupo []Row) error {
+		corpo, ok := sec(tipo, nome)
 		if !ok {
 			return nil
 		}
 		it.row = linha
 		it.aggRows, it.aggAtivo = grupo, true
-		err := it.exec(corpo)
+		err := it.rodaSecao(EventKey{Kind: tipo, Target: nome}, corpo)
 		it.aggAtivo = false
 		return err
 	}
@@ -904,10 +955,12 @@ func (it *Interp) executa() error {
 	if _, temBeforeReport := sec("before", "report"); !temBeforeReport {
 		if corpo, ok := sec("header", ""); ok {
 			it.row = it.rows[0]
-			if err := it.exec(corpo); err != nil {
+			if err := it.rodaSecao(EventKey{Kind: "header"}, corpo); err != nil {
 				return err
 			}
-			it.flush()
+			if err := it.flush(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -924,16 +977,18 @@ func (it *Interp) executa() error {
 		}
 		quebra := 0
 		if prev == nil {
-			if corpo, ok := sec("before", "report"); ok {
-				if err := roda(corpo, ok, r, nil); err != nil {
+			if _, ok := sec("before", "report"); ok {
+				if err := roda("before", "report", r, nil); err != nil {
 					return err
 				}
 				if cab, temCab := sec("header", ""); temCab && !it.Strict {
 					it.row = r
-					if err := it.exec(cab); err != nil {
+					if err := it.rodaSecao(EventKey{Kind: "header"}, cab); err != nil {
 						return err
 					}
-					it.flush()
+					if err := it.flush(); err != nil {
+						return err
+					}
 				}
 			}
 		} else {
@@ -948,8 +1003,7 @@ func (it *Interp) executa() error {
 				if niveis[j] == "" {
 					continue
 				}
-				corpo, ok := sec("after", niveis[j])
-				if err := roda(corpo, ok, prev, it.rows[ini[j]:i]); err != nil {
+				if err := roda("after", niveis[j], prev, it.rows[ini[j]:i]); err != nil {
 					return err
 				}
 			}
@@ -957,16 +1011,13 @@ func (it *Interp) executa() error {
 		for j := quebra; j < nn; j++ {
 			ini[j] = i
 			if niveis[j] != "" {
-				corpo, ok := sec("before", niveis[j])
-				if err := roda(corpo, ok, r, nil); err != nil {
+				if err := roda("before", niveis[j], r, nil); err != nil {
 					return err
 				}
 			}
 		}
-		if corpo, ok := sec("detail", ""); ok {
-			if err := roda(corpo, ok, r, nil); err != nil {
-				return err
-			}
+		if err := roda("detail", "", r, nil); err != nil {
+			return err
 		}
 		prev, prevK = r, k
 	}
@@ -974,26 +1025,23 @@ func (it *Interp) executa() error {
 		if niveis[j] == "" {
 			continue
 		}
-		corpo, ok := sec("after", niveis[j])
-		if err := roda(corpo, ok, prev, it.rows[ini[j]:]); err != nil {
+		if err := roda("after", niveis[j], prev, it.rows[ini[j]:]); err != nil {
 			return err
 		}
 	}
-	if corpo, ok := sec("after", "report"); ok {
-		if err := roda(corpo, ok, prev, it.rows); err != nil {
-			return err
-		}
+	if err := roda("after", "report", prev, it.rows); err != nil {
+		return err
 	}
-	it.flush()
-	it.fechaPagina(false)
-
-	return nil
+	if err := it.flush(); err != nil {
+		return err
+	}
+	return it.fechaPagina(false)
 }
 
 // Run executa o relatório e devolve o texto final, paginado.
 func (it *Interp) Run() (string, error) {
 	if err := it.executa(); err != nil {
-		return "", err
+		return "", it.relata(err)
 	}
 	sep := ""
 	if it.FormFeed {
@@ -1020,7 +1068,7 @@ func (it *Interp) Paginas(linhasPorPagina int) ([][]string, error) {
 	it.semMargens = true
 	it.linhasPagina = linhasPorPagina
 	if err := it.executa(); err != nil {
-		return nil, err
+		return nil, it.relata(err)
 	}
 	return it.paginas, nil
 }

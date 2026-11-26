@@ -57,6 +57,29 @@ func TestScriptNaLinhaIgualAoArquivo(t *testing.T) {
 	}
 }
 
+// Um erro de execução sai byte a byte igual do arquivo .rp e do -e.
+func TestErroDeExecucaoIgualNoArquivoENaLinha(t *testing.T) {
+	const entrada = "input nome, valor [numeric]\n"
+	longa := "\tprint '" + strings.Repeat("é", 90) + "',\tvalor / (valor - valor)"
+	for _, c := range []struct{ nome, script, secao string }{
+		{"detail", entrada + "detail\n   print nome, valor / 0\nend\n", "detail"},
+		{"linha longa com tabs e acentos", entrada + "detail\n" + longa + "\nend\n", "detail"},
+		{"várias linhas com CRLF", "input nome, valor [numeric]\r\ndetail\r\n   print valor %\r\n      ''\r\nend\r\n", "detail"},
+		{"sem quebra de linha no fim", entrada + "sort valor / null\nend", "sort"},
+	} {
+		rp, dat := arquivosLinha(t, c.script, dadosLinha)
+		code, out, want := executa(t, "", rp, dat)
+		if code != 1 || out != "" || !strings.HasPrefix(want, "rptgo: divisão por zero na seção "+c.secao+"\nscript, linha ") {
+			t.Fatalf("%s: code=%d stdout=%q stderr=%q", c.nome, code, out, want)
+		}
+		for _, opcao := range []string{"-e", "--script"} {
+			if code, out, errb := executa(t, "", opcao, c.script, dat); code != 1 || out != "" || errb != want {
+				t.Errorf("%s %s: code=%d stdout=%q\n--- linha ---\n%q\n--- arquivo ---\n%q", c.nome, opcao, code, out, errb, want)
+			}
+		}
+	}
+}
+
 // O texto de -e nunca é tratado como caminho de arquivo.
 func TestScriptNaLinhaNaoLeArquivo(t *testing.T) {
 	rp, dat := arquivosLinha(t, scriptLinha, dadosLinha)
