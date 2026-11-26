@@ -88,14 +88,14 @@ func (it *Interp) converte(linhas [][]string) ([]Row, error) {
 	cols := it.S.Input
 	out := make([]Row, 0, len(linhas))
 	for i, campos := range linhas {
-		ln := i + 1
+		registro := i + 1
 		if len(campos) != len(cols) {
-			return nil, ErroLinhaDados(ln, "phase error no arquivo de entrada: registro %d tem %d campos, esperados %d",
-				ln, len(campos), len(cols))
+			return nil, ErroLinhaDados(registro, "phase error no arquivo de entrada: registro %d tem %d campos, esperados %d",
+				registro, len(campos), len(cols))
 		}
 		r := make(Row, len(cols))
 		for j, col := range cols {
-			v, err := it.tipa(campos[j], col, ln)
+			v, err := it.tipa(campos[j], col, registro)
 			if err != nil {
 				return nil, err
 			}
@@ -106,7 +106,7 @@ func (it *Interp) converte(linhas [][]string) ([]Row, error) {
 	return out, nil
 }
 
-func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
+func (it *Interp) tipa(txt string, col InputCol, registro int) (Value, error) {
 	var t string
 	if col.Type == "string" {
 		t = strings.TrimRight(txt, " \t\r\n\v\f")
@@ -120,7 +120,7 @@ func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
 		}
 		f, err := strconv.ParseFloat(t, 64)
 		if err != nil {
-			return nil, ErroLinhaDados(ln, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, ln, txt, err)
+			return nil, ErroLinhaDados(registro, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, registro, txt, err)
 		}
 		return int64(math.Trunc(f)), nil
 	case tiposFlt[col.Type]:
@@ -129,7 +129,7 @@ func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
 		}
 		f, err := strconv.ParseFloat(t, 64)
 		if err != nil {
-			return nil, ErroLinhaDados(ln, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, ln, txt, err)
+			return nil, ErroLinhaDados(registro, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, registro, txt, err)
 		}
 		return f, nil
 	case col.Type == "bool":
@@ -140,7 +140,7 @@ func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
 	case col.Type == "time":
 		h, ok, err := ParseHora(t)
 		if err != nil {
-			return nil, ErroLinhaDados(ln, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, ln, txt, err)
+			return nil, ErroLinhaDados(registro, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, registro, txt, err)
 		}
 		if !ok {
 			return nil, nil
@@ -149,7 +149,7 @@ func (it *Interp) tipa(txt string, col InputCol, ln int) (Value, error) {
 	case col.Type == "date" || col.Type == "ldate":
 		d, ok, err := ParseData(t)
 		if err != nil {
-			return nil, ErroLinhaDados(ln, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, ln, txt, err)
+			return nil, ErroLinhaDados(registro, "valor inválido em '%s' (registro %d): %q (%v)", col.Name, registro, txt, err)
 		}
 		if !ok {
 			return nil, nil

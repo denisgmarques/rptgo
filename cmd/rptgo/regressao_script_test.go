@@ -6,7 +6,8 @@ import (
 )
 
 // Estes testes fixam o comportamento anterior às mudanças nas mensagens de erro de script: o que
-// é válido continua com a mesma saída, e os erros de dados e de tipo lógico não mudam.
+// é válido continua com a mesma saída, e os erros de dados e de tipo lógico não mudam. A exceção
+// são as linhas de dados longas, que saem cortadas.
 
 func TestRegressaoScriptsDoRepositorio(t *testing.T) {
 	var scripts []string
@@ -89,7 +90,7 @@ func TestRegressaoErrosSemMudanca(t *testing.T) {
 		{"valor invalido em linha longa",
 			"input a, n [numeric]\nend\n",
 			"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|abc\n",
-			"rptgo: valor inválido em 'n' (registro 1): \"abc\" (strconv.ParseFloat: parsing \"abc\": invalid syntax)\n  1 | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|abc\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"},
+			"rptgo: valor inválido em 'n' (registro 1): \"abc\" (strconv.ParseFloat: parsing \"abc\": invalid syntax)\n  1 | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"},
 		{"linha indentada",
 			"input a, n [numeric]\nend\n",
 			"    z|abc\n",
@@ -101,7 +102,7 @@ func TestRegressaoErrosSemMudanca(t *testing.T) {
 		{"campos demais",
 			"input a, b\nend\n",
 			"    xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|b|c\n",
-			"rptgo: phase error no arquivo de entrada: registro 1 tem 3 campos, esperados 2\n  1 |     xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|b|c\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"},
+			"rptgo: phase error no arquivo de entrada: registro 1 tem 3 campos, esperados 2\n  1 |     xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...\n      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"},
 		{"condicao aritmetica",
 			"input n [numeric]\ndetail\n   if n + 1 then print n\nend\n",
 			"1\n",
