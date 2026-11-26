@@ -1573,8 +1573,48 @@ end
 -1234.50    ***,**&.&&   **1,234.50
 ```
 
-Repare que `&` completa com zeros e `#` com brancos, que o sinal e a moeda ocupam a primeira posição
-da máscara, e que os parênteses só aparecem nos negativos.
+Repare que `&` completa com zeros e `#` com brancos, que um sinal ou símbolo de moeda **único** fica
+na primeira posição da máscara, e que os parênteses só aparecem nos negativos.
+
+### Sinal e moeda colados no primeiro dígito
+
+Repita o caractere (`--,---,--&.&&`) e ele passa a **flutuar**: as posições repetidas recebem os
+dígitos, e o sinal é impresso uma única vez, logo antes do primeiro deles. Os valores continuam
+alinhados pela direita. O mesmo vale para `+`, `$` e `(`. Reserve uma posição a mais para o sinal: a
+máscara abaixo comporta 8 dígitos inteiros mais o sinal.
+
+<!-- script -->
+```text
+input v [float]
+left margin 0
+detail
+   print v using '-##,###,##&.&&' in col 1,
+         v using '--,---,--&.&&' in col 18,
+         v using '$$,$$$,$$&.&&' in col 34,
+         v using '((,(((,((&.&&)' in col 50
+end
+```
+<!-- data -->
+```text
+-5
+-123
+-1234.5
+-123456
+-1234567.89
+123
+```
+<!-- output -->
+```text
+-         5.00           -5.00           $5.00           (5.00)
+-       123.00         -123.00         $123.00         (123.00)
+-     1,234.50       -1,234.50       $1,234.50       (1,234.50)
+-   123,456.00     -123,456.00     $123,456.00     (123,456.00)
+- 1,234,567.89   -1,234,567.89   $1,234,567.89   (1,234,567.89)
+        123.00          123.00         $123.00          123.00
+```
+
+Na primeira coluna o sinal único fica parado à esquerda; nas outras ele (ou o `$`, ou o parêntese)
+acompanha o número.
 
 ### Máscaras no estilo `printf`
 

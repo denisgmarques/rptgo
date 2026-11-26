@@ -116,6 +116,12 @@ func FmtMascara(v Value, mask string) (string, error) {
 	}
 	for pos := len(ip) - 1; pos >= 0; pos-- {
 		ch := ip[pos]
+		// vírgula sem dígito à esquerda, dentro de uma sequência de sinais ou moeda
+		// ('--,--&', '$$,$$&'): vale como mais uma posição da sequência, para o símbolo
+		// ficar colado no primeiro dígito.
+		if ch == ',' && len(restantes) == 0 && pos > 0 && strings.IndexByte("-+$(", ip[pos-1]) >= 0 {
+			ch = ip[pos-1]
+		}
 		switch {
 		case strings.ContainsRune("#&*-+$(", rune(ch)):
 			if len(restantes) > 0 {
