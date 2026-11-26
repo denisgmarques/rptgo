@@ -4,8 +4,16 @@ package report
 // a avaliação de fato (em interp.go) usa um type switch sobre o tipo concreto.
 type Expr interface{ exprNode() }
 
+// posicao é o trecho do script de um nó, em índices de Script.toks: ini é o primeiro token, foco
+// o que identifica a construção (o operador, o nome ou a palavra 'substr') e fim o último. O
+// valor zero quer dizer posição desconhecida (o token 0 nunca faz parte de uma expressão).
+type posicao struct{ ini, foco, fim int32 }
+
 type ConstExpr struct{ Val Value }
-type ColExpr struct{ Name string }
+type ColExpr struct {
+	Name string
+	pos  posicao
+}
 type TodayExpr struct{}
 type HourExpr struct{}
 type PageNoExpr struct{}
@@ -20,22 +28,26 @@ type IsNullExpr struct {
 type CmpExpr struct {
 	Op   string // = <> < > <= >=
 	L, R Expr
+	pos  posicao
 }
 type BinExpr struct {
 	Op   string // + - * /
 	L, R Expr
+	pos  posicao
 }
 
 // SubstrExpr é "texto substr [início-fim]": posições de 1 em diante, fim inclusivo.
 type SubstrExpr struct {
 	X          Expr
 	Start, End int
+	pos        posicao
 }
 type CallExpr struct {
 	Name  string
 	Args  []Expr
 	Star  bool // count(*...)
 	Where Expr // count(* where expr)
+	pos   posicao
 }
 
 func (ConstExpr) exprNode()  {}
@@ -61,6 +73,8 @@ type PrintItem struct {
 	Col      Expr // nil = posição automática
 	Using    Expr // nil = sem máscara
 	Centered bool
+
+	posCol, posMascara posicao // trechos de Col e de Using
 }
 type PrintStmt struct {
 	Items     []PrintItem
@@ -102,6 +116,7 @@ type SortKey struct {
 	Name string // "" se a expressão não tiver nome (não pode ser usada em before/after)
 	Expr Expr
 	Desc bool
+	pos  posicao // trecho da expressão, sem o "<nome>"
 }
 
 // EventKey identifica uma seção de evento: (Kind, Target). Target só é usado com
@@ -126,4 +141,5 @@ type Script struct {
 	Variaveis  map[string]bool // nomes usados em 'set' (precisam de set antes do primeiro uso)
 	Nomeadas   map[string]Expr // expressões com apelido: "<nome> expr" no sort ou num print
 	ordemEvent []EventKey      // ordem de inserção, só pra mensagens/depuração estáveis
+	toks       []Token         // tokens do script, para situar os nós nas mensagens de erro
 }

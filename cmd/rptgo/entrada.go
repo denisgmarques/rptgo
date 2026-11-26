@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -22,25 +21,36 @@ const (
 	entradaJSON  = "json"
 )
 
+// bom é a marca de ordem de bytes do UTF-8, ignorada no começo de um CSV ou JSON.
+const bom = "\xEF\xBB\xBF"
+
 var valoresInput = []string{entradaTexto, entradaCSV, entradaJSON}
+
+// novoLeitorCSV cria o leitor de CSV dos dados de entrada, sem o BOM.
+func novoLeitorCSV(texto string, delim rune) *csv.Reader {
+	r := csv.NewReader(strings.NewReader(strings.TrimPrefix(texto, bom)))
+	r.Comma = delim
+	r.FieldsPerRecord = -1 // a conferência de colunas é do motor ("phase error")
+	r.LazyQuotes = true
+	return r
+}
+
+// ehCabecalhoCSV diz se o primeiro registro do CSV é um cabeçalho a pular, conforme --header.
+func ehCabecalhoCSV(reg []string, primeiraColuna, cabecalho string) bool {
+	primeira := strings.ToLower(strings.TrimSpace(reg[0]))
+	return cabecalho == "sim" || (cabecalho == "auto" && primeira == primeiraColuna)
+}
 
 // leRegistrosCSV lê CSV com o delimitador dado. Campos entre aspas podem ter o delimitador,
 // aspas dobradas e quebras de linha. O cabeçalho segue --header (sim | nao | auto, que compara
 // o primeiro campo com o nome da primeira coluna do input).
 func leRegistrosCSV(texto string, delim rune, primeiraColuna, cabecalho string) ([][]string, error) {
-	r := csv.NewReader(strings.NewReader(strings.TrimPrefix(texto, "\xEF\xBB\xBF")))
-	r.Comma = delim
-	r.FieldsPerRecord = -1 // a conferência de colunas é do motor ("phase error")
-	r.LazyQuotes = true
-	regs, err := r.ReadAll()
+	regs, err := novoLeitorCSV(texto, delim).ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("CSV inválido: %v", err)
 	}
-	if len(regs) > 0 {
-		primeira := strings.ToLower(strings.TrimSpace(regs[0][0]))
-		if cabecalho == "sim" || (cabecalho == "auto" && primeira == primeiraColuna) {
-			regs = regs[1:]
-		}
+	if len(regs) > 0 && ehCabecalhoCSV(regs[0], primeiraColuna, cabecalho) {
+		regs = regs[1:]
 	}
 	return regs, nil
 }
@@ -67,7 +77,7 @@ func leRegistrosJSONDec(texto string, cols []report.InputCol, decimalVirgula boo
 	for i, c := range cols {
 		colunas[i] = c.Name
 	}
-	dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(texto, "\xEF\xBB\xBF")))
+	dec := json.NewDecoder(strings.NewReader(strings.TrimPrefix(texto, bom)))
 	dec.UseNumber()
 	var objs []map[string]any
 	// primeiro valor: array de objetos ou um objeto
@@ -85,7 +95,7 @@ func leRegistrosJSONDec(texto string, cols []report.InputCol, decimalVirgula boo
 			for i, it := range x {
 				o, ok := it.(map[string]any)
 				if !ok {
-					return nil, fmt.Errorf("JSON: o item %d do array não é um objeto", i+1)
+					return nil, report.ErroPosicaoDados(posicaoJSON(texto, len(objs)), "JSON: o item %d do array não é um objeto", i+1)
 				}
 				objs = append(objs, o)
 			}
@@ -127,7 +137,8 @@ func leRegistrosJSONDec(texto string, cols []report.InputCol, decimalVirgula boo
 					reg[j] = "false"
 				}
 			default:
-				return nil, fmt.Errorf("JSON: registro %d, campo %q não é um valor simples (texto, número ou booleano)", i+1, nome)
+				return nil, report.ErroPosicaoDados(posicaoJSON(texto, i),
+					"JSON: registro %d, campo %q não é um valor simples (texto, número ou booleano)", i+1, nome)
 			}
 		}
 		regs[i] = reg
@@ -141,10 +152,6 @@ func leRegistrosJSONDec(texto string, cols []report.InputCol, decimalVirgula boo
 	}
 	return regs, nil
 }
-
-// textoFonteJSON devolve o texto que serve de contexto para mensagens de erro (uma linha por
-// registro), no mesmo formato dos outros tipos de fonte.
-func textoFonteJSON(texto string) string { return string(bytes.TrimSpace([]byte(texto))) }
 
 var tiposNumericos = map[string]bool{"numeric": true, "integer": true, "long": true, "int": true,
 	"float": true, "amount": true, "double": true, "real": true, "huge": true}
@@ -199,7 +206,7 @@ func limpaNumeroBR(s string) string {
 // Aspas não precisam ser detectadas: o leitor de CSV trata campos com e sem aspas no mesmo arquivo.
 func detectaDelimitadorCSV(texto string, ncols int) rune {
 	const limite = 64 << 10
-	amostra := strings.TrimPrefix(texto, "\xEF\xBB\xBF")
+	amostra := strings.TrimPrefix(texto, bom)
 	if len(amostra) > limite {
 		amostra = amostra[:limite]
 		if i := strings.LastIndex(amostra, "\n"); i > 0 {

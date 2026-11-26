@@ -100,17 +100,35 @@ const larguraTrecho = 72
 // volta da palavra, com "..." nos lados cortados.
 func erroNaPalavra(linha, col, tam int, formato string, args ...any) error {
 	msg := fmt.Sprintf("linha %d: %s", linha, fmt.Sprintf(formato, args...))
-	if linha <= 0 || linha > len(FonteScript) {
+	fonte, marcador, ok := trechoScript(linha, col, tam, col)
+	if !ok {
 		return &Error{msg: msg}
+	}
+	return &Error{msg: fmt.Sprintf("%s\n%s\n%s", msg, fonte, marcador)}
+}
+
+// trechoScript monta a linha do script como aparece num erro, "  N | texto", e o marcador de "^"
+// sob o trecho que começa na coluna col (em runas, a partir de 0) e ocupa tam runas. De uma linha
+// longa saem larguraTrecho runas, com "..." nos lados cortados, sempre com a coluna foco (a do
+// operador, ou a própria col) dentro delas: um trecho curto fica centralizado, e um que não cabe
+// começa na col; se assim o foco ficasse de fora, o corte é centralizado nele e o marcador começa
+// no início do que é mostrado. ok é false quando a linha não existe no script.
+func trechoScript(linha, col, tam, foco int) (fonte, marcador string, ok bool) {
+	if linha <= 0 || linha > len(FonteScript) {
+		return "", "", false
 	}
 	texto := []rune(strings.TrimSuffix(FonteScript[linha-1], "\r"))
 	n := len(texto)
 	col = min(max(col, 0), n)
 	ini, fim := 0, n
 	if n > larguraTrecho {
-		ini = col
-		if tam < larguraTrecho { // centraliza a palavra no trecho
+		switch {
+		case tam < larguraTrecho: // centraliza a palavra no trecho
 			ini = max(0, min(col-(larguraTrecho-tam)/2, n-larguraTrecho))
+		case foco < col+larguraTrecho:
+			ini = col
+		default:
+			ini = max(0, min(foco-larguraTrecho/2, n-larguraTrecho))
 		}
 		fim = min(ini+larguraTrecho, n)
 	}
@@ -122,18 +140,19 @@ func erroNaPalavra(linha, col, tam int, formato string, args ...any) error {
 		depois = "..."
 	}
 	prefixo := fmt.Sprintf("  %d | ", linha)
-	var marcador strings.Builder
-	marcador.WriteString(strings.Repeat(" ", len(prefixo)+len(antes)))
+	marca := max(col, ini) // onde o marcador começa
+	var sb strings.Builder
+	sb.WriteString(strings.Repeat(" ", len(prefixo)+len(antes)))
 	// os tabs são repetidos para o marcador alinhar com qualquer largura de tabulação
-	for _, c := range texto[ini:col] {
+	for _, c := range texto[ini:marca] {
 		if c == '\t' {
-			marcador.WriteByte('\t')
+			sb.WriteByte('\t')
 		} else {
-			marcador.WriteByte(' ')
+			sb.WriteByte(' ')
 		}
 	}
-	marcador.WriteString(strings.Repeat("^", max(1, min(tam, fim-col))))
-	return &Error{msg: fmt.Sprintf("%s\n%s%s%s%s\n%s", msg, prefixo, antes, string(texto[ini:fim]), depois, marcador.String())}
+	sb.WriteString(strings.Repeat("^", max(1, min(col+tam, fim)-marca)))
+	return prefixo + antes + string(texto[ini:fim]) + depois, sb.String(), true
 }
 
 // larguraMarcadorDados é o máximo de "^" sob uma linha de dados.

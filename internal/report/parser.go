@@ -42,7 +42,7 @@ func (ps *parser) registraNome(nome string, e Expr, iNome int, f faixa) error {
 		return nil
 	}
 	if antiga, ok := ps.nomeadas[nome]; ok {
-		if !reflect.DeepEqual(antiga, e) {
+		if !reflect.DeepEqual(semPosicao(antiga), semPosicao(e)) {
 			return ps.erroEm(iNome, "o nome '%s' já foi dado a outra expressão", nome)
 		}
 		return nil
@@ -51,6 +51,61 @@ func (ps *parser) registraNome(nome string, e Expr, iNome int, f faixa) error {
 	ps.faixaNomes[nome] = f
 	return nil
 }
+
+// semPosicao devolve uma cópia da expressão com as posições zeradas, para comparar expressões
+// escritas em lugares diferentes do script. Todo tipo de nó com posição ou com filhos precisa
+// estar aqui.
+func semPosicao(e Expr) Expr {
+	switch x := e.(type) {
+	case ColExpr:
+		x.pos = posicao{}
+		return x
+	case NegExpr:
+		x.X = semPosicao(x.X)
+		return x
+	case NotExpr:
+		x.X = semPosicao(x.X)
+		return x
+	case AndExpr:
+		x.L, x.R = semPosicao(x.L), semPosicao(x.R)
+		return x
+	case OrExpr:
+		x.L, x.R = semPosicao(x.L), semPosicao(x.R)
+		return x
+	case IsNullExpr:
+		x.X = semPosicao(x.X)
+		return x
+	case CmpExpr:
+		x.L, x.R, x.pos = semPosicao(x.L), semPosicao(x.R), posicao{}
+		return x
+	case BinExpr:
+		x.L, x.R, x.pos = semPosicao(x.L), semPosicao(x.R), posicao{}
+		return x
+	case SubstrExpr:
+		x.X, x.pos = semPosicao(x.X), posicao{}
+		return x
+	case CallExpr:
+		if x.Args != nil {
+			args := make([]Expr, len(x.Args))
+			for i, a := range x.Args {
+				args[i] = semPosicao(a)
+			}
+			x.Args = args
+		}
+		x.Where, x.pos = semPosicao(x.Where), posicao{}
+		return x
+	}
+	return e // constantes e embutidas não têm posição; nil continua nil
+}
+
+// trecho é a posição de um nó que começa no token ini, identificado pelo token foco, e termina no
+// último token já lido.
+func (ps *parser) trecho(ini, foco int) posicao {
+	return posicao{ini: int32(ini), foco: int32(foco), fim: int32(ps.p - 1)}
+}
+
+// umToken é a posição de um nó marcado só pelo token i.
+func umToken(i int) posicao { return posicao{ini: int32(i), foco: int32(i), fim: int32(i)} }
 
 // apelido lê "<nome>" se houver e devolve o nome ("" se não houver) e o token dele.
 func (ps *parser) apelido() (string, int, error) {
@@ -197,6 +252,7 @@ func Parse(toks []Token) (*Script, error) {
 		Separator: "|",
 		Events:    map[EventKey][]Stmt{},
 		Variaveis: map[string]bool{},
+		toks:      toks,
 	}
 	s.Width = cfgInt("WIDTH", 80)
 	s.Length = cfgInt("PAGELN", 66)
@@ -333,10 +389,12 @@ func (ps *parser) pSort(s *Script) error {
 			return err
 		}
 		ini := len(ps.refs)
+		iExpr := ps.p
 		e, err := ps.expr()
 		if err != nil {
 			return err
 		}
+		pos := ps.trecho(iExpr, iExpr)
 		f := faixa{ini, len(ps.refs)}
 		ps.chaves = append(ps.chaves, f)
 		if nome != "" {
@@ -354,7 +412,7 @@ func (ps *parser) pSort(s *Script) error {
 			ps.nx()
 			desc = true
 		}
-		s.Sort = append(s.Sort, SortKey{Name: nome, Expr: e, Desc: desc})
+		s.Sort = append(s.Sort, SortKey{Name: nome, Expr: e, Desc: desc, pos: pos})
 		if ps.isOp(",") {
 			ps.nx()
 			continue
@@ -551,13 +609,13 @@ func (ps *parser) pPrint() (Stmt, error) {
 			case ps.isKw("in") && ps.isKwAt(1, "col", "column"):
 				ps.nx()
 				ps.nx()
-				item.Col, err = ps.expr()
+				item.Col, item.posCol, err = ps.exprSituada()
 			case ps.isKw("col", "column"):
 				ps.nx()
-				item.Col, err = ps.expr()
+				item.Col, item.posCol, err = ps.exprSituada()
 			case ps.isKw("using"):
 				ps.nx()
-				item.Using, err = ps.expr()
+				item.Using, item.posMascara, err = ps.exprSituada()
 			case ps.isKw("centered"):
 				ps.nx()
 				item.Centered = true
@@ -586,6 +644,16 @@ func (ps *parser) pPrint() (Stmt, error) {
 }
 
 // --- expressões (precedência: or > and > not > comparação > + - > * / > unário > primário)
+
+// exprSituada lê uma expressão e devolve também o trecho do script que ela ocupa.
+func (ps *parser) exprSituada() (Expr, posicao, error) {
+	i := ps.p
+	e, err := ps.expr()
+	if err != nil {
+		return nil, posicao{}, err
+	}
+	return e, ps.trecho(i, i), nil
+}
 
 func (ps *parser) expr() (Expr, error) {
 	a, err := ps.eAnd()
@@ -634,6 +702,7 @@ func (ps *parser) eNot() (Expr, error) {
 var opsCmp = map[string]bool{"=": true, "<>": true, "^=": true, "!=": true, "<": true, ">": true, "<=": true, ">=": true}
 
 func (ps *parser) eCmp() (Expr, error) {
+	ini := ps.p // inclui os parênteses do operando esquerdo
 	a, err := ps.eAdd()
 	if err != nil {
 		return nil, err
@@ -641,6 +710,7 @@ func (ps *parser) eCmp() (Expr, error) {
 	for {
 		tk := ps.pk(0)
 		if tk.Kind == TokOp && opsCmp[tk.Text] {
+			foco := ps.p
 			ps.nx()
 			b, err := ps.eAdd()
 			if err != nil {
@@ -650,7 +720,7 @@ func (ps *parser) eCmp() (Expr, error) {
 			if op == "^=" || op == "!=" {
 				op = "<>"
 			}
-			a = CmpExpr{Op: op, L: a, R: b}
+			a = CmpExpr{Op: op, L: a, R: b, pos: ps.trecho(ini, foco)}
 		} else if ps.isKw("is") {
 			ps.nx()
 			neg := false
@@ -669,33 +739,37 @@ func (ps *parser) eCmp() (Expr, error) {
 }
 
 func (ps *parser) eAdd() (Expr, error) {
+	ini := ps.p // inclui os parênteses do operando esquerdo
 	a, err := ps.eMul()
 	if err != nil {
 		return nil, err
 	}
 	for ps.isOp("+", "-", "/+") {
+		foco := ps.p
 		op := ps.nx().Text
 		b, err := ps.eMul()
 		if err != nil {
 			return nil, err
 		}
-		a = BinExpr{Op: op, L: a, R: b}
+		a = BinExpr{Op: op, L: a, R: b, pos: ps.trecho(ini, foco)}
 	}
 	return a, nil
 }
 
 func (ps *parser) eMul() (Expr, error) {
+	ini := ps.p // inclui os parênteses do operando esquerdo
 	a, err := ps.eUn()
 	if err != nil {
 		return nil, err
 	}
 	for ps.isOp("*", "/", "%") {
+		foco := ps.p
 		op := ps.nx().Text
 		b, err := ps.eUn()
 		if err != nil {
 			return nil, err
 		}
-		a = BinExpr{Op: op, L: a, R: b}
+		a = BinExpr{Op: op, L: a, R: b, pos: ps.trecho(ini, foco)}
 	}
 	return a, nil
 }
@@ -724,7 +798,7 @@ func (ps *parser) eUn() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		sub.X = e
+		sub.X, sub.pos = e, umToken(i)
 		e = sub
 	}
 	return e, nil
@@ -850,7 +924,7 @@ func (ps *parser) ePrim() (Expr, error) {
 			if err := ps.confereArgumentos(i, v, len(args), star); err != nil {
 				return nil, err
 			}
-			return CallExpr{Name: v, Args: args, Star: star, Where: where}, nil
+			return CallExpr{Name: v, Args: args, Star: star, Where: where, pos: umToken(i)}, nil
 		}
 		switch v {
 		case "today":
@@ -861,7 +935,7 @@ func (ps *parser) ePrim() (Expr, error) {
 			return PageNoExpr{}, nil
 		}
 		ps.refs = append(ps.refs, referencia{nome: v, tok: i})
-		return ColExpr{Name: v}, nil
+		return ColExpr{Name: v, pos: umToken(i)}, nil
 	}
 	if tk.Kind == TokEOF {
 		return nil, ps.erroEm(i, "expressão inválida: %s", ps.fimDoScript())

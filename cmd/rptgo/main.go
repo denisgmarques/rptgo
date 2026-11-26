@@ -134,14 +134,17 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 			delimCSV, _ = delimitadorCSV(op.inputDelim)
 		}
 		delim := delimCSV
-		registros, err = leRegistrosCSV(dados, delim, strings.ToLower(script.Input[0].Name), op.header)
+		primeiraColuna := strings.ToLower(script.Input[0].Name)
+		report.DefLocalizadorDados(localizadorCSV(dados, delim, primeiraColuna, op.header))
+		registros, err = leRegistrosCSV(dados, delim, primeiraColuna, op.header)
 	case entradaJSON:
+		report.DefLocalizadorDados(localizadorJSON(dados))
 		registros, err = leRegistrosJSONDec(dados, script.Input, op.inputDec == ",")
 		if err == nil && op.inputDec == "auto" && temDecimalVirgula(registros, script.Input) {
 			registros, err = leRegistrosJSONDec(dados, script.Input, true) // valores como "R$ 1.250,50"
 		}
-		report.DefFonteDados(textoFonteJSON(dados))
 	default:
+		report.DefLocalizadorDados(localizadorTexto(dados, script.Separator, script.Input[0].Name, op.header))
 		registros = leRegistros(dados, script.Separator, script.Input[0].Name, op.header, len(script.Input))
 	}
 	if err != nil {
@@ -524,11 +527,8 @@ func leRegistros(texto, sep, primeiraColuna, cabecalho string, ncols int) [][]st
 	if n := len(linhas); n > 0 && linhas[n-1] == "" {
 		linhas = linhas[:n-1]
 	}
-	if len(linhas) > 0 {
-		primeiraPalavra := strings.ToLower(strings.TrimSpace(strings.SplitN(linhas[0], sep, 2)[0]))
-		if cabecalho == "sim" || (cabecalho == "auto" && primeiraPalavra == primeiraColuna) {
-			linhas = linhas[1:]
-		}
+	if len(linhas) > 0 && ehCabecalhoTexto(linhas[0], sep, primeiraColuna, cabecalho) {
+		linhas = linhas[1:]
 	}
 	regs := make([][]string, 0, len(linhas))
 	for _, ln := range linhas {
@@ -540,6 +540,13 @@ func leRegistros(texto, sep, primeiraColuna, cabecalho string, ncols int) [][]st
 		regs = append(regs, campos)
 	}
 	return regs
+}
+
+// ehCabecalhoTexto diz se a primeira linha do texto delimitado é um cabeçalho a pular, conforme
+// --header.
+func ehCabecalhoTexto(linha, sep, primeiraColuna, cabecalho string) bool {
+	primeiraPalavra := strings.ToLower(strings.TrimSpace(strings.SplitN(linha, sep, 2)[0]))
+	return cabecalho == "sim" || (cabecalho == "auto" && primeiraPalavra == primeiraColuna)
 }
 
 // valorOu devolve v, ou padrao quando v é vazio.
