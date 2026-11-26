@@ -13,17 +13,22 @@ O exemplo [Feriados do ano](examples/feriados-brasil/README.md): um `curl`, o sc
 ## Para que serve
 
 Você tem dados em arquivos de texto: um arquivo separado por delimitador, o CSV exportado do
-Excel, um JSON, a saída de outro programa ou de uma consulta ao banco. E precisa de um
-relatório com **layout**: colunas alinhadas, cabeçalho e rodapé por página, **várias quebras
-em cascata** (grupo, subgrupo, item) e **totais, contagens e médias em cada nível**. Escrever
-isso à mão em código é trabalhoso; o `rptgo` faz com um script declarativo de poucas linhas,
-numa linguagem declarativa de relatórios (seções `input`, `sort`,
-`before`, `after`, `detail`).
+Excel, um JSON, a saída de outro programa ou de uma consulta ao banco. Com o `rptgo` dá para:
+
+- **gerar um relatório** com layout: colunas alinhadas, cabeçalho e rodapé por página, **várias
+  quebras em cascata** (grupo, subgrupo, item) e **totais, contagens e médias em cada nível**, o que
+  é trabalhoso de escrever à mão em código;
+- **[converter o formato](#converter-entre-texto-csv-e-json)** dos dados entre texto delimitado, CSV
+  e JSON, escolhendo os tipos e a ordem, sem layout nenhum.
+
+Nos dois casos um script curto descreve os dados, numa linguagem declarativa de relatórios (seções
+`input`, `sort`, `before`, `after`, `detail`). Ele fica num arquivo `.rp` ou vai na própria linha de
+comando, com `-e`.
 
 ```
- fontes de dados            script .rp                          saídas
+ fontes de dados          script .rp ou -e                      saídas
  ┌────────────────────┐   ┌────────────────────┐
- │ texto com |        │   │ input   (colunas)  │
+ │ texto com |        │   │ input   (colunas)  │ ──────────▶  CSV / JSON (só os dados)
  │ CSV (do Excel)     │──▶│ sort    (ordem)    │
  │ JSON               │   ├────────────────────┤ ──────────▶  texto paginado (matricial)
  └────────────────────┘   │ before / after     │ ─▶ template ▶  PDF / HTML com logo e caixas
@@ -35,9 +40,10 @@ numa linguagem declarativa de relatórios (seções `input`, `sort`,
   aspas e qualquer delimitador, inclusive o do Excel brasileiro (`;` e decimal com vírgula), e
   JSON (`--input`). O `input` do script diz o tipo de cada coluna, então datas, números e
   `bool` seguem as mesmas regras em qualquer fonte.
-- **Layout para impressão:** o layout do script (`before`/`after`/`detail`) gera o relatório
-  paginado e o PDF (`--format text|html`). Também dá para exportar os dados, sem layout, em CSV
-  ou JSON (`--format csv|json`), na ordem do `sort`.
+- **Conversão sem layout:** `--format csv|json` usa só o `input` e o `sort`; o texto delimitado sai
+  como um CSV com outro delimitador e sem cabeçalho.
+- **Layout para impressão:** as seções `before`/`after`/`detail` geram o relatório paginado e o PDF
+  (`--format text|html`).
 - **Quebras em cascata e acumuladores:** `before`/`after` em cada nível do `sort`, com `count`,
   `total`, `avg`, `min` e `max`, inclusive filtrados (`total(salary where active)`).
 - **Layout em colunas:** `print ... in col N using 'máscara'`, datas, moldes numéricos,
@@ -72,10 +78,19 @@ end
 | JSON → CSV | `./rptgo --input json --format csv colunas.rp clientes.json` |
 | JSON → texto delimitado | `./rptgo --input json --format csv --csv-delimiter '\|' --csv-no-header colunas.rp clientes.json` |
 
-No bash e no zsh dá para dispensar o arquivo `.rp`, escrevendo o script no próprio comando:
+Para dispensar o arquivo `.rp`, passe o script no próprio comando com `-e` (ou `--script`):
 
+<!-- run -->
 ```sh
-./rptgo --input csv --format json <(echo 'input id [numeric], nome end') dados.csv
+./rptgo --input json --format csv -e 'input nome, limite [float] sort limite desc end' \
+  examples/conversao-formatos/clientes.json
+```
+<!-- expect -->
+```text
+nome,limite
+Ana Souza,1500.5
+Bruno Lima,-250
+Carla Dias,
 ```
 
 Os tipos, os cabeçalhos, a escolha de colunas, a ordenação e a codificação estão em
@@ -86,6 +101,7 @@ Os tipos, os cabeçalhos, a escolha de colunas, a ordenação e a codificação 
 ```sh
 go build -o rptgo ./cmd/rptgo     # um binário estático, sem dependências
 ./rptgo [opções] script.rp [dados.txt | -]
+./rptgo [opções] -e 'SCRIPT' [dados.txt | -]
 ```
 
 Sem o arquivo de dados (ou com `-`), lê da entrada padrão. Todas as opções estão na ajuda:
@@ -97,16 +113,20 @@ Sem o arquivo de dados (ou com `-`), lê da entrada padrão. Todas as opções e
 <!-- expect -->
 ```text
 Uso: rptgo [OPÇÃO]... SCRIPT.rp [ENTRADA.txt | -]
+     rptgo [OPÇÃO]... -e 'SCRIPT' [ENTRADA.txt | -]
 
 Executa um script de relatório (.rp) sobre um arquivo de dados (texto com campos separados
 por '|', CSV ou JSON) e escreve o relatório paginado, PDF/HTML, CSV ou JSON.
 Sem ENTRADA.txt, ou com '-', lê os dados da entrada padrão.
 
 Opções:
+  -e, --script TEXTO             o script inteiro na linha de comando, no lugar de SCRIPT.rp;
+                                 o texto é UTF-8 e não é afetado por --encoding
   -o, --saida, --output ARQUIVO  grava no ARQUIVO em vez da saída padrão
       --format FORMATO           formato da saída: text (padrão), csv, json ou html;
                                  csv, json e html não combinam com --form-feed
-      --encoding CODIFICAÇÃO     leitura e escrita: utf-8 (padrão), latin-1 ou cp850
+      --encoding CODIFICAÇÃO     do arquivo .rp, dos dados e da saída: utf-8 (padrão),
+                                 latin-1 ou cp850
       --header MODO              1ª linha dos dados é cabeçalho: auto (padrão),
                                  sim ou nao
       --form-feed                separa páginas com \f em vez de completar com linhas
@@ -141,7 +161,7 @@ Opções de --format html (a saída é sempre UTF-8, sem linhas em branco de pre
       --template ARQUIVO         modelo HTML (padrão: folhas A4 embutidas)
       --var NOME=VALOR           define {{NOME}} no modelo; pode repetir
       --logo ARQUIVO             imagem (png, jpg, gif, svg, webp) em {{Logo}}
-      --title TEXTO              {{Title}} (padrão: nome do script)
+      --title TEXTO              {{Title}} (padrão: nome do script; com -e, rptgo)
       --lines N                  linhas de texto por página (padrão: length - margens
                                  superior e inferior do script)
   Modelo: {{#Pages}}...{{/Pages}} repete por página. Variáveis: Title, Script, Date, Time,
@@ -162,6 +182,7 @@ Exemplos:
   cat dados.txt | rptgo -o saida.txt relatorio.rp -
   rptgo --format csv --csv-delimiter ';' --csv-quote strings --csv-decimal ',' relatorio.rp dados.txt
   rptgo --format html --box --template modelo.html --logo logo.svg relatorio.rp dados.txt > saida.html
+  rptgo --input csv --format json -e 'input nome, idade [numeric] end' dados.csv
 ```
 
 ## Exemplos

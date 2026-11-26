@@ -32,15 +32,19 @@ func contem(lista []string, v string) bool {
 // textoAjuda devolve a ajuda no formato usual de comandos Linux (Uso / Opções / Exemplos).
 func textoAjuda(nome string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Uso: %s [OPÇÃO]... SCRIPT.rp [ENTRADA.txt | -]\n\n", nome)
+	fmt.Fprintf(&b, "Uso: %s [OPÇÃO]... SCRIPT.rp [ENTRADA.txt | -]\n", nome)
+	fmt.Fprintf(&b, "     %s [OPÇÃO]... -e 'SCRIPT' [ENTRADA.txt | -]\n\n", nome)
 	b.WriteString("Executa um script de relatório (.rp) sobre um arquivo de dados (texto com campos separados\n")
 	b.WriteString("por '|', CSV ou JSON) e escreve o relatório paginado, PDF/HTML, CSV ou JSON.\n")
 	b.WriteString("Sem ENTRADA.txt, ou com '-', lê os dados da entrada padrão.\n\n")
 	b.WriteString("Opções:\n")
+	b.WriteString("  -e, --script TEXTO             o script inteiro na linha de comando, no lugar de SCRIPT.rp;\n")
+	b.WriteString("                                 o texto é UTF-8 e não é afetado por --encoding\n")
 	b.WriteString("  -o, --saida, --output ARQUIVO  grava no ARQUIVO em vez da saída padrão\n")
 	b.WriteString("      --format FORMATO           formato da saída: text (padrão), csv, json ou html;\n")
 	b.WriteString("                                 csv, json e html não combinam com --form-feed\n")
-	b.WriteString("      --encoding CODIFICAÇÃO     leitura e escrita: utf-8 (padrão), latin-1 ou cp850\n")
+	b.WriteString("      --encoding CODIFICAÇÃO     do arquivo .rp, dos dados e da saída: utf-8 (padrão),\n")
+	b.WriteString("                                 latin-1 ou cp850\n")
 	b.WriteString("      --header MODO              1ª linha dos dados é cabeçalho: auto (padrão),\n")
 	b.WriteString("                                 sim ou nao\n")
 	b.WriteString("      --form-feed                separa páginas com \\f em vez de completar com linhas\n")
@@ -72,7 +76,7 @@ func textoAjuda(nome string) string {
 	b.WriteString("      --template ARQUIVO         modelo HTML (padrão: folhas A4 embutidas)\n")
 	b.WriteString("      --var NOME=VALOR           define {{NOME}} no modelo; pode repetir\n")
 	b.WriteString("      --logo ARQUIVO             imagem (png, jpg, gif, svg, webp) em {{Logo}}\n")
-	b.WriteString("      --title TEXTO              {{Title}} (padrão: nome do script)\n")
+	b.WriteString("      --title TEXTO              {{Title}} (padrão: nome do script; com -e, rptgo)\n")
 	b.WriteString("      --lines N                  linhas de texto por página (padrão: length - margens\n")
 	b.WriteString("                                 superior e inferior do script)\n")
 	b.WriteString("  Modelo: {{#Pages}}...{{/Pages}} repete por página. Variáveis: Title, Script, Date, Time,\n")
@@ -89,6 +93,7 @@ func textoAjuda(nome string) string {
 	fmt.Fprintf(&b, "  cat dados.txt | %s -o saida.txt relatorio.rp -\n", nome)
 	fmt.Fprintf(&b, "  %s --format csv --csv-delimiter ';' --csv-quote strings --csv-decimal ',' relatorio.rp dados.txt\n", nome)
 	fmt.Fprintf(&b, "  %s --format html --box --template modelo.html --logo logo.svg relatorio.rp dados.txt > saida.html\n", nome)
+	fmt.Fprintf(&b, "  %s --input csv --format json -e 'input nome, idade [numeric] end' dados.csv\n", nome)
 	return b.String()
 }
 

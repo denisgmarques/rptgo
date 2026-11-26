@@ -14,7 +14,7 @@ func TestAjudaListaTodasAsOpcoes(t *testing.T) {
 		if !strings.HasPrefix(out, "Uso: rptgo [OPÇÃO]... SCRIPT.rp [ENTRADA.txt | -]") {
 			t.Errorf("%s: linha de uso inesperada:\n%s", flag, out)
 		}
-		for _, op := range []string{"-o, --saida, --output", "--format", "--encoding", "--header", "--form-feed",
+		for _, op := range []string{"-e, --script", "é UTF-8 e não é afetado por --encoding", "-o, --saida, --output", "--format", "--encoding", "--header", "--form-feed",
 			"--newline", "--strict", "-r, --check", "-h, --help", "text", "csv", "json", "latin-1", "cp850", "crlf", "Exemplos:", "Código de saída"} {
 			if !strings.Contains(out, op) {
 				t.Errorf("%s: a ajuda não menciona %q", flag, op)

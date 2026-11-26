@@ -172,16 +172,26 @@ entre aspas. Datas saem como `AAAA-MM-DD`, que o `rptgo` lê de volta.
 
 ## Sem criar o arquivo `.rp`
 
-No bash e no zsh, `<(...)` entrega o script como se fosse um arquivo:
+A opção `-e` (ou `--script`) recebe o script inteiro como texto. O único argumento que sobra é o
+arquivo de dados:
 
+<!-- run -->
 ```sh
-./rptgo --input csv --format json <(echo 'input id [numeric], nome end') dados.csv
+./rptgo --input json --format csv -e 'input nome, limite [float] sort limite desc end' \
+  examples/conversao-formatos/clientes.json
+```
+<!-- expect -->
+```text
+nome,limite
+Ana Souza,1500.5
+Bruno Lima,-250
+Carla Dias,
 ```
 
 Com os dados vindo de outro comando:
 
 ```sh
-printf '1;Ana\n2;Beto\n' | ./rptgo --input csv --format json <(echo 'input id [numeric], nome end')
+printf '1;Ana\n2;Beto\n' | ./rptgo --input csv --format json -e 'input id [numeric], nome end'
 ```
 
 ```text
@@ -191,13 +201,30 @@ printf '1;Ana\n2;Beto\n' | ./rptgo --input csv --format json <(echo 'input id [n
 ]
 ```
 
-Quando os dados estão num arquivo, o script também pode vir da entrada padrão, com `/dev/stdin` no
-lugar do nome do script. No Windows, grave o script num arquivo.
+As aspas seguem as regras do seu terminal. Quando o script tem aspas simples, como em
+`separator '|'`, envolva o texto em aspas duplas:
+
+<!-- run -->
+```sh
+./rptgo --format csv -e "input id, nome, cidade, cadastro, ativo, limite separator '|' end" \
+  examples/conversao-formatos/clientes.txt
+```
+<!-- expect -->
+```text
+id,nome,cidade,cadastro,ativo,limite
+1,Ana Souza,Curitiba,15/01/2026,yes,1500.50
+2,Bruno Lima,São Paulo,04/07/2025,no,-250
+3,Carla Dias,"Recife, PE",,yes,
+```
+
+O texto do `-e` aceita tudo o que um arquivo `.rp` aceita, inclusive quebras de linha e seções de
+relatório.
 
 ## Opções de saída e codificação
 
 - CSV: `--csv-delimiter`, `--csv-quote`, `--csv-decimal` e `--csv-no-header` (veja `./rptgo --help`).
 - CSV do Excel brasileiro: `--input csv --input-decimal auto --encoding latin-1`.
-- `--encoding` vale para a leitura **e** a escrita. Como JSON costuma ser lido em UTF-8, converta a
-  saída: `... --encoding latin-1 ... | iconv -f latin1 -t utf-8`.
+- `--encoding` vale para o arquivo `.rp`, os dados **e** a saída; o texto do `-e` é sempre UTF-8.
+  Como JSON costuma ser lido em UTF-8, converta a saída:
+  `... --encoding latin-1 ... | iconv -f latin1 -t utf-8`.
 - `-o arquivo` grava o resultado num arquivo.

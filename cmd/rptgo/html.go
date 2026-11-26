@@ -234,15 +234,19 @@ func montaHTML(op opcoes, paginas [][]string) (string, error) {
 	} else {
 		tpl = modeloPadrao(op.logo != "")
 	}
-	script := strings.TrimSuffix(filepath.Base(op.script), filepath.Ext(op.script))
-	titulo := op.titulo
-	if titulo == "" {
-		titulo = script
+	// com -e não há arquivo de script: {{Script}} fica vazio e o título padrão é "rptgo"
+	arquivo, titulo := "", "rptgo"
+	if !op.temTextoScript {
+		arquivo = filepath.Base(op.script)
+		titulo = strings.TrimSuffix(arquivo, filepath.Ext(arquivo))
+	}
+	if op.titulo != "" {
+		titulo = op.titulo
 	}
 	agora := report.Agora()
 	globais := map[string]string{
 		"Title":     titulo,
-		"Script":    filepath.Base(op.script),
+		"Script":    arquivo,
 		"Date":      agora.Format("2006-01-02"),
 		"Time":      agora.Format("15:04"),
 		"Columns":   strconv.Itoa(colunasMax(paginas)),

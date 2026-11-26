@@ -5,6 +5,7 @@
 // Uso:
 //
 //	rptgo [opções] script.rp [entrada.txt | -]  > relatorio.txt
+//	rptgo [opções] -e 'SCRIPT' [entrada.txt | -]
 package main
 
 import (
@@ -22,29 +23,31 @@ import (
 )
 
 type opcoes struct {
-	script     string
-	entrada    string
-	saida      string
-	encoding   string
-	header     string // auto | sim | nao
-	formFeed   bool
-	newline    string // auto | lf | crlf
-	strict     bool
-	check      bool
-	formato    string // text | csv | json
-	box        bool
-	input      string   // --input delimited|csv|json
-	inputDelim string   // --input-delimiter
-	inputDec   string   // --input-decimal
-	csvDelim   string   // --csv-delimiter
-	csvQuote   string   // --csv-quote
-	csvDec     string   // --csv-decimal
-	csvSemCab  bool     // --csv-no-header
-	template   string   // --template (html)
-	vars       []string // --var NOME=VALOR (html)
-	logo       string   // --logo (html)
-	titulo     string   // --title (html)
-	linhas     int      // --lines (html)
+	script         string
+	textoScript    string // -e, --script: o script na própria linha de comando
+	temTextoScript bool   // distingue -e "" da ausência da opção
+	entrada        string
+	saida          string
+	encoding       string
+	header         string // auto | sim | nao
+	formFeed       bool
+	newline        string // auto | lf | crlf
+	strict         bool
+	check          bool
+	formato        string // text | csv | json
+	box            bool
+	input          string   // --input delimited|csv|json
+	inputDelim     string   // --input-delimiter
+	inputDec       string   // --input-decimal
+	csvDelim       string   // --csv-delimiter
+	csvQuote       string   // --csv-quote
+	csvDec         string   // --csv-decimal
+	csvSemCab      bool     // --csv-no-header
+	template       string   // --template (html)
+	vars           []string // --var NOME=VALOR (html)
+	logo           string   // --logo (html)
+	titulo         string   // --title (html)
+	linhas         int      // --lines (html)
 }
 
 func main() {
@@ -66,23 +69,27 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		erroUso(erroPadrao, err)
 		return 2
 	}
-	if len(posicionais) < 1 {
-		fmt.Fprintf(erroPadrao, "%s: falta o arquivo de script\n\n", nomePrograma)
-		fmt.Fprint(erroPadrao, textoAjuda(nomePrograma))
-		return 2
+	// com -e o script já veio na linha de comando (em UTF-8, sem passar por --encoding) e o
+	// único posicional são os dados; sem -e o primeiro posicional é o arquivo do script.
+	textoScript := op.textoScript
+	if !op.temTextoScript {
+		if len(posicionais) < 1 {
+			fmt.Fprintf(erroPadrao, "%s: falta o arquivo de script\n\n", nomePrograma)
+			fmt.Fprint(erroPadrao, textoAjuda(nomePrograma))
+			return 2
+		}
+		op.script, posicionais = posicionais[0], posicionais[1:]
+		textoScriptBytes, err := os.ReadFile(op.script)
+		if err != nil {
+			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
+			return 1
+		}
+		textoScript = decodificar(textoScriptBytes, op.encoding)
 	}
-	op.script = posicionais[0]
 	op.entrada = "-"
-	if len(posicionais) > 1 {
-		op.entrada = posicionais[1]
+	if len(posicionais) > 0 {
+		op.entrada = posicionais[0]
 	}
-
-	textoScriptBytes, err := os.ReadFile(op.script)
-	if err != nil {
-		fmt.Fprintln(erroPadrao, nomePrograma+":", err)
-		return 1
-	}
-	textoScript := decodificar(textoScriptBytes, op.encoding)
 	report.DefFonteScript(textoScript)
 	toks, err := report.Tokenize(textoScript, op.strict)
 	if err != nil {
@@ -305,6 +312,15 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			return args[i], nil
 		}
 		switch a {
+		case "-e", "--script":
+			v, err := next()
+			if err != nil {
+				return op, nil, err
+			}
+			if op.temTextoScript {
+				return op, nil, fmt.Errorf("-e/--script só pode ser usado uma vez")
+			}
+			op.textoScript, op.temTextoScript = v, true
 		case "-o", "--saida", "--output":
 			v, err := next()
 			if err != nil {
@@ -456,6 +472,9 @@ func analisaArgs(args []string) (opcoes, []string, error) {
 			}
 			pos = append(pos, a)
 		}
+	}
+	if op.temTextoScript && len(pos) > 1 {
+		return op, nil, fmt.Errorf("com -e/--script só cabe o arquivo de dados; sobrou: %s", strings.Join(pos[1:], " "))
 	}
 	if op.box && op.formato != "text" && op.formato != "html" {
 		return op, nil, fmt.Errorf("--box só vale com --format text ou html")
