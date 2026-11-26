@@ -1,0 +1,5 @@
+[
+{"id":1,"nome":"Ana Souza","cidade":"Curitiba","cadastro":"2026-01-15","ativo":true,"limite":1500.5},
+{"id":2,"nome":"Bruno Lima","cidade":"São Paulo","cadastro":"2025-07-04","ativo":false,"limite":-250},
+{"id":3,"nome":"Carla Dias","cidade":"Recife, PE","cadastro":null,"ativo":true,"limite":null}
+]

@@ -1,0 +1,9 @@
+/* Conversao entre formatos: so a lista de colunas, sem layout. */
+input
+   id       [numeric],
+   nome     [string],
+   cidade   [string],
+   cadastro [ldate],
+   ativo    [bool],
+   limite   [float]
+end

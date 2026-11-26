@@ -8,7 +8,7 @@ para impressora, **PDF com logo e layout**, CSV ou JSON, a partir da mesma defin
 
 O exemplo [Feriados do ano](examples/feriados-brasil/README.md): um `curl`, o script e o relatório. A fatura em PDF está no exemplo [Fatura em HTML/PDF](examples/invoice-html/README.md).
 
-**Documentação:** [Referência da linguagem](REFERENCIA.md) · [Exemplos](#exemplos) · [Saída HTML e caixas](SAIDA-HTML.md)
+**Documentação:** [Referência da linguagem](REFERENCIA.md) · [Exemplos](#exemplos) · [Converter formatos](#converter-entre-texto-csv-e-json) · [Saída HTML e caixas](SAIDA-HTML.md)
 
 ## Para que serve
 
@@ -45,6 +45,41 @@ numa linguagem declarativa de relatórios (seções `input`, `sort`,
 - **PDF sem sair do terminal:** `--format html` junta o relatório a um template com logo e
   variáveis; o navegador imprime em PDF.
 - **Um binário só**, em Go, sem dependências.
+
+## Converter entre texto, CSV e JSON
+
+Sem layout nenhum, o `rptgo` converte os dados de um formato para outro. O script continua
+obrigatório, mas só precisa da lista de colunas:
+
+<!-- file: examples/conversao-formatos/colunas.rp -->
+```text
+/* Conversao entre formatos: so a lista de colunas, sem layout. */
+input
+   id       [numeric],
+   nome     [string],
+   cidade   [string],
+   cadastro [ldate],
+   ativo    [bool],
+   limite   [float]
+end
+```
+
+| Conversão | Comando |
+|---|---|
+| texto delimitado → CSV | `./rptgo --format csv colunas.rp clientes.txt` |
+| texto delimitado → JSON | `./rptgo --format json colunas.rp clientes.txt` |
+| CSV → JSON | `./rptgo --input csv --format json colunas.rp clientes.csv` |
+| JSON → CSV | `./rptgo --input json --format csv colunas.rp clientes.json` |
+| JSON → texto delimitado | `./rptgo --input json --format csv --csv-delimiter '\|' --csv-no-header colunas.rp clientes.json` |
+
+No bash e no zsh dá para dispensar o arquivo `.rp`, escrevendo o script no próprio comando:
+
+```sh
+./rptgo --input csv --format json <(echo 'input id [numeric], nome end') dados.csv
+```
+
+Os tipos, os cabeçalhos, a escolha de colunas, a ordenação e a codificação estão em
+[Converter entre texto delimitado, CSV e JSON](examples/conversao-formatos/README.md).
 
 ## Linha de comando
 
@@ -144,6 +179,7 @@ conferidos por testes. Os arquivos ficam em [`examples/`](examples/).
 | [Estoque por categoria e subcategoria](examples/relatorio-estoque-categoria/README.md) | duas quebras com `count`, `total` e `avg` |
 | [Cadastro de clientes](examples/cadastro-clientes/README.md) | datas, `bool` e nulos; saída em CSV e JSON |
 | [Contas a receber](examples/invoice-aging/README.md) | aritmética de datas e faixas de atraso |
+| [Conversão de formatos](examples/conversao-formatos/README.md) | texto delimitado, CSV e JSON, de um para outro, sem layout |
 
 ## Estrutura
 

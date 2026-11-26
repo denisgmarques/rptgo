@@ -1,0 +1,3 @@
+1|Ana Souza|Curitiba|15/01/2026|yes|1500.50
+2|Bruno Lima|São Paulo|04/07/2025|no|-250
+3|Carla Dias|Recife, PE||yes|

@@ -1,0 +1,4 @@
+id,nome,cidade,cadastro,ativo,limite
+1,Ana Souza,Curitiba,2026-01-15,true,1500.5
+2,Bruno Lima,São Paulo,2025-07-04,false,-250
+3,Carla Dias,"Recife, PE",,true,
