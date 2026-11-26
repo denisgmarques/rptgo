@@ -539,6 +539,15 @@ Chaves que são só uma coluna não precisam de nome: `sort regiao, produto` já
 uma função de agregação (`total`, `count`...) é erro de script, apontado antes da leitura dos dados
 (seção 12).
 
+**Erros nas chaves.** As chaves são calculadas na ordenação, antes de qualquer seção e em todos os
+formatos de saída (inclusive `csv` e `json`), e de novo a cada registro durante o relatório, para
+achar as quebras. Um divisor zero em `/` ou `%` (seção 7.2) para o relatório com o erro
+`divisão por zero`. Um valor de tipo errado (como `dow` sobre um número) e dois valores de uma chave
+que não se comparam (uma data e um número) param o relatório com uma mensagem que começa por
+`no sort:` (seção 12). Os outros erros no cálculo de uma chave, como `substr` sobre uma data, deixam
+a chave nula, sem aviso. Durante a ordenação `pageno` vale 0 e as variáveis de `set` ainda são
+nulas, então como divisores também param o relatório.
+
 ---
 
 ## 5. Seções do relatório
@@ -550,14 +559,15 @@ pode aparecer uma vez no script.
 |---|---|---|
 | `before report` | uma vez, antes do primeiro registro | o primeiro registro |
 | `after report` | uma vez, depois do último registro | o último registro |
-| `header` | no topo de cada página | o primeiro registro |
-| `footer` | no fim de cada página | o primeiro registro |
+| `header` | no topo de cada página | o atual: na primeira página, o primeiro registro; numa quebra de página, o que a causou |
+| `footer` | no fim de cada página | o atual: numa quebra de página, o que a causou; na última página, o último registro |
 | `detail` | para cada registro | o próprio registro |
 | `before <chave>` | quando começa um grupo novo da chave (inclusive o primeiro) | o primeiro registro do grupo |
 | `after <chave>` | quando o grupo da chave termina | o último registro do grupo |
 
 `<chave>` é o nome de um nível do `sort` (seção 4). As funções de agregação (`count`, `total`,
-`avg`, `min` e `max`) só calculam nas seções `after`, onde enxergam todos os registros do grupo (seção 8).
+`avg`, `min` e `max`) calculam sobre um grupo nas seções `after`, onde enxergam todos os registros
+dele. A seção 8.1 explica o que acontece com elas nas outras seções.
 
 **A ordem em cascata.** Quando uma chave de nível k muda, rodam primeiro os `after` dos níveis de
 dentro para fora, até k, e depois os `before` de k para dentro. O exemplo imprime o nome de cada
@@ -623,6 +633,14 @@ nível `b` também fecha, o `[after b]` vem antes do `[after a]`).
 **Cabeçalho e rodapé.** O `header` roda no topo de cada página nova e o `footer` no fim, e é
 empurrado até a última linha da página. O rodapé reserva espaço no fim, e `pageno` dá o número da
 página (seção 8).
+
+Os dois leem o registro que está sendo processado quando rodam. Numa quebra de página é o registro
+que a causou, que vai ser impresso na página seguinte: no exemplo abaixo, um `print n` no `footer`
+mostraria 6 no fim da primeira página. A última página fecha com o último registro, quando o script
+tem `detail` ou uma seção `after`. Para saber a altura do rodapé, o programa também roda o `footer`
+uma vez antes das outras seções, com o primeiro registro (na ordem do `sort`) e `pageno` igual a 1.
+Um erro de execução no `header` ou no `footer`, em qualquer página ou nessa medida, para o relatório
+(seção 12).
 
 <!-- script -->
 ```text
@@ -1082,6 +1100,14 @@ end
 1.0 / 3          0.33
 ```
 
+**Divisão por zero.** Se o lado direito de `/` ou `%` vale zero na conta (`0`, `0.0`, nulo, texto
+vazio, qualquer outro texto ou falso), o relatório para com o erro `divisão por zero`, em qualquer
+seção e nas chaves do `sort` (seção 12). Uma divisão que não é avaliada não dá erro: a que está no
+ramo não executado de um `if`, no lado direito de um `and` ou `or` já decidido, num registro
+excluído pelo `where` de uma função de agregação ou numa seção que não roda. Quando uma coluna numérica pode
+ser zero ou nula, teste antes: `if z <> 0 then print n / z`. Com datas e horas, `/` e `%` dão o
+erro de operação inválida.
+
 ### 7.3 Texto
 
 - `+` junta dois textos **mantendo** os brancos do fim do primeiro.
@@ -1369,8 +1395,13 @@ lapis    8.50
 
 As funções de agregação calculam sobre o **grupo** de registros nas seções `after <chave>` (o grupo que acabou
 de fechar) e `after report` (todos os registros). Cada grupo começa do zero. Em `detail` e nas seções
-`before` não existe um grupo, e o resultado é vazio (`0`); em `header` e `footer` o programa avisa
-com um erro.
+`before` não existe um grupo, e o resultado é vazio (`0`).
+
+O `header` e o `footer` não têm um grupo próprio. Quando nenhuma seção `detail`, `before` ou `after`
+está em andamento (o `header` do começo do relatório, a medida da altura do rodapé e o fechamento da
+última página), avaliar uma função de agregação neles é um erro. Numa quebra de página no meio de uma dessas
+seções, eles enxergam o grupo dela: no meio de `detail` ou `before` o resultado é vazio, e no meio
+de um `after` é o daquele grupo. O erro sempre para o relatório, em qualquer página (seção 12).
 
 | Função | Resultado |
 |---|---|
@@ -1840,11 +1871,31 @@ cabeçalho que está no `header`, rode sem a opção e tire a cópia.
 
 ## 12. Mensagens de erro comuns
 
-Os erros de sintaxe e de tipo aparecem antes de o relatório rodar; os de dados e os de execução,
-quando o registro problemático é lido ou calculado. Quase todos mostram a linha envolvida.
+Os erros de sintaxe e de tipo aparecem antes de o relatório rodar; os de dados, na leitura dos
+registros; e os de execução, quando uma chave do `sort` ou uma seção é calculada. O programa mostra
+um erro só, termina com código 1 e quase sempre mostra a linha envolvida.
 
 Num erro de script, o marcador `^` fica sob a palavra em que o problema foi encontrado. De uma linha
 com mais de 72 caracteres sai só o trecho em volta dela, com `...` no lado cortado.
+
+Num **erro de dados**, a linha mostrada é aquela em que o registro começa no arquivo (ou na entrada
+padrão), com o número dela. Um cabeçalho pulado, as linhas em branco e os registros de várias linhas
+do CSV ou do JSON entram na contagem das linhas; o número do registro, na mensagem, não conta o
+cabeçalho. De uma linha com mais de 72 caracteres saem no máximo 72, a partir do começo do registro,
+com `...` nos lados cortados.
+
+Um **erro de execução** não deixa saída: nada é escrito, e o arquivo de `-o` não é criado nem
+alterado. A primeira linha traz a mensagem e a seção (`header`, `detail`, `after <chave>`, `sort`...),
+seguida destas partes:
+
+| Parte | O que mostra |
+|---|---|
+| `script` | o número e a linha do script, com `^` sob a construção que falhou e o mesmo corte dos erros de script |
+| `conta` | só na divisão por zero: a operação e o valor dos operandos que não são números escritos no script |
+| `dados` | a linha e o número do registro que estava sendo lido, sem `^`, com o mesmo corte das linhas longas |
+
+Quando dois valores de uma chave do `sort` não se comparam, saem duas partes `dados`, uma para cada
+registro, na ordem da entrada.
 
 **Tipo desconhecido no `input`:**
 
@@ -2001,7 +2052,7 @@ dados, linha 1 (registro 1):
   1 | 0
 ```
 
-**Função de agregação numa seção onde não há grupo** (`header` e `footer`; em `detail` ele devolve 0):
+**Função de agregação sem um grupo** no `header` ou no `footer` (seção 8.1; em `detail` ela devolve 0):
 
 <!-- script -->
 ```text
@@ -2095,8 +2146,8 @@ end
 **Operadores:** `+ - * / %` · `+ /+ substr[a-b]` · `= <> ^= != < > <= >=` · `is [not] null` ·
 `not and or` · parênteses. Condição = expressão lógica.
 
-**Funções:** `count(*)` `count(e)` `total(e)` `avg(e)` `min(e)` `max(e)` (só em `after`, aceitam
-`where`) · `dow(d)` `mdy(d, 0|1|2)` `index(n, a, b, ...)` · embutidas `today` `hour` `pageno`
+**Funções:** `count(*)` `count(e)` `total(e)` `avg(e)` `min(e)` `max(e)` (calculam o grupo em
+`after`, aceitam `where`) · `dow(d)` `mdy(d, 0|1|2)` `index(n, a, b, ...)` · embutidas `today` `hour` `pageno`
 
 **Tipos:** `string text numeric integer long int float amount double real huge date ldate time bool`
 

@@ -10,7 +10,6 @@ Commands assume a fresh build: `go build -o rptgo ./cmd/rptgo`.
 |---|---|---|---|
 | B1 | Text wrapping counts bytes instead of characters | Bug | High |
 | B2 | Impossible dates are accepted and roll over | Bug | High |
-| B3 | `header` and `footer` errors after page 1 are silently ignored | Bug | High |
 | B4 | Other evaluation errors in `sort` keys are silently ignored | Decision | Medium |
 | B5 | Very large sizes crash with out of memory | Bug | Low |
 | B6 | `REFERENCIA.md` describes the `&` mask position backwards | Docs | Low |
@@ -42,27 +41,16 @@ printf '31/02/2026\n' | ./rptgo -e 'input d [ldate] detail print d end'
 - **Expected:** an invalid value error showing the record, as for other invalid input.
 - **Where:** date parsing in `internal/report/dates.go`.
 
-## B3. `header` and `footer` errors after page 1 are silently ignored
-
-```sh
-printf '1|1\n2|1\n3|1\n4|0\n5|0\n' | ./rptgo -e "input n [numeric], z [numeric] top margin 0 bottom margin 0 length 3 header print 'h', 10 / z detail print n end"
-```
-
-- **Today:** on the page where `z` is 0 the header prints only `h`, with exit code 0. The same
-  happens with `footer`.
-- **Expected:** the division by zero stops the report, as it does in `detail`.
-- **Where:** the calls to `exec` in `fechaPagina` and `novaPagina`, `internal/report/interp.go`.
-
 ## B4. Other evaluation errors in `sort` keys are silently ignored
 
 ```sh
-printf '1|0\n' | ./rptgo --format csv -e 'input n [numeric], z [numeric] sort n / z end'
+printf '2026-03-02\n2026-01-01\n' | ./rptgo --format csv -e 'input d [ldate] sort d substr[1-2] end'
 ```
 
-- **Today:** the key becomes null and the run succeeds. Only wrong value types (such as `dow` on a
-  number) stop the report.
-- **To decide:** reporting every error is safer, but scripts that run today would start failing. One
-  known case is `sort d substr[1-2]` where `d` is a date.
+- **Today:** `substr` on a date fails, the key becomes null and the run succeeds, with the records in
+  input order. A wrong value type (such as `dow` on a number) stops the report, but this error does
+  not.
+- **To decide:** reporting every error is safer, but scripts that run today would start failing.
 - **Where:** `Interp.chave` in `internal/report/interp.go`.
 
 ## B5. Very large sizes crash with out of memory
