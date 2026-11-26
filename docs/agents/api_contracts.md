@@ -4,155 +4,204 @@
 
 ## AS IS — Current state
 
-No HTTP endpoints, RPC or queues exist (no server code, no network packages in `cmd/rptgo` or `internal/report`). The contract is the CLI, its exit codes, the HTML template placeholders and the CSV/JSON output shapes.
-
 ### HTTP endpoints
 
-Not applicable. See sections below for the CLI surface.
+- None: no HTTP server; the only entrypoint is `cmd/rptgo/main.go`. The public surface is the CLI, the `.rp` script language and the data formats.
 
-### CLI
-
-```
-rptgo [options] script.rp [data-file | -]
-```
-
-- 1st positional = script (required, else exit 2); 2nd = data file; absent or `-` = stdin.
-- Options and positionals may be mixed in any order. Unknown `-x` option = exit 2.
-- `-h`/`--help` anywhere prints help to stdout, exit 0.
-
-| Exit | Meaning |
-|---|---|
-| 0 | Success (also `--check` with no syntax errors) |
-| 1 | Script, data, I/O or template error; message `rptgo: ...` on stderr |
-| 2 | Usage error or invalid option value; usage hint on stderr |
-
-### Options
-
-| Option | Values / default | Constraint |
+| Contract family | Entry | Auth |
 |---|---|---|
-| `-o`, `--output`, `--saida` | file path; default stdout | |
-| `--encoding` | `utf-8` (default), `latin-1`, `cp850`; applies to script, data and output | HTML output is always UTF-8 |
-| `--header` | `auto` (default), `sim`, `nao` | |
-| `--form-feed` | flag | text only |
-| `--newline` | `auto` (CRLF on Windows), `lf`, `crlf` | |
-| `--format` | `text` (default), `html`, `csv`, `json` | |
-| `--box` | flag | text or html; not with `latin-1` text |
-| `--input` | `delimited` (default), `csv`, `json` | |
-| `--input-delimiter` | `auto`, `comma`, `semicolon`, `tab`, `pipe`, `\t` or 1 char | only `--input csv`; `auto` is the csv default |
-| `--input-decimal` | `.`, `,`, `auto`; unset = point | not with `--input json`; `,` not with comma delimiter |
-| `--csv-delimiter` | same names/char; default `,` | only `--format csv` |
-| `--csv-quote` | `minimal` (default), `strings`, `all` | only `--format csv` |
-| `--csv-decimal` | `.` (default), `,` | only `--format csv`; differs from delimiter |
-| `--csv-no-header` | flag | only `--format csv` |
-| `--template` | HTML template file | only `--format html` |
-| `--var NAME=VALUE` | `NAME` = `[A-Za-z_][A-Za-z0-9_]*`; repeatable | only `--format html` |
-| `--logo` | image file embedded as base64 data URI | only `--format html` |
-| `--title` | default = script file name without extension | only `--format html` |
-| `--lines` | integer >= 1, text lines per page | only `--format html` |
-| `--strict` | flag; `/* */` comments must open and close on one line (else script error, `lexer.go`); with a `before report` section, page 1 does not run `header` (`Interp.Strict`); a bare `today` prints as `date` (2-digit year) instead of `ldate` | |
-| `--check`, `-r` | flag; parse script only, print `Script sem erros de sintaxe.` | |
+| CLI | `rptgo` arguments, streams, exit codes | None (local process) |
+| Script language | `.rp` file or `-e` text | None |
+| Input data | File or stdin | None |
+| Output data | stdout or `-o` file | None |
+| HTML template | `--template` file | None |
 
-Environment read by the interpreter: `DATEFMT` (`DD/MM/YY`), `CENTURY_CUTOFF` (30), `TIMEFMT` (`HH:MM`), `WIDTH` (80), `PAGELN` (66), `SEPARATOR` (`\|`), `RADIXSEP` (`.`), `CURRSYM` (`$`), `RPT_NOW` (`2026-11-24 17:47`, `2006-01-02 15:04:05` or RFC 3339; fixes the clock).
-
-### Script contract (`.rp`)
-
-Example (`examples/relatorio-vendas-regiao/relatorio.rp`):
+### CLI invocation
 
 ```
-input
-   regiao    [string 10],
-   vendedor  [string 14],
-   valor     [amount 10]
+rptgo [options] SCRIPT.rp [INPUT | -]
+rptgo [options] -e 'SCRIPT' [INPUT | -]
+```
 
-width 60
-length 26
-sort regiao
+- Options and positionals mix in any order. No `INPUT` or `-`: read stdin.
+- `-e` text is UTF-8, never decoded by `--encoding`, never treated as a path; usable once; leaves at most 1 positional.
 
-detail
-   print regiao in col 1, vendedor in col 14, valor in col 30 using '#,###,##&.&&'
+| Flag | Values (default first) | Valid with |
+|---|---|---|
+| `-e`, `--script` | script text | all |
+| `-o`, `--saida`, `--output` | file path | all |
+| `--format` | `text`, `csv`, `json`, `html` | all |
+| `--encoding` | `utf-8`, `utf8`, `latin-1`, `latin1`, `iso-8859-1`, `iso8859-1`, `cp850` (case-insensitive) | all |
+| `--header` | `auto`, `sim`, `nao` | all; ignored for JSON input |
+| `--newline` | `auto` (CRLF on Windows), `lf`, `crlf` | all |
+| `--form-feed` | switch | `text` |
+| `--box` | switch | `text` (not latin-1), `html` |
+| `--strict` | switch | all |
+| `-r`, `--check` | switch | all |
+| `-h`, `--help` | switch; wins over everything | all |
+| `--input` | `delimited`, `csv`, `json` | all |
+| `--input-delimiter` | `auto`, 1 character, `comma`, `semicolon`, `tab`, `pipe`, `\t` | `--input csv` |
+| `--input-decimal` | `.`, `,`, `auto` | all; `,` excludes a comma CSV delimiter |
+| `--csv-delimiter` | `,`; same forms as input delimiter, no `auto`; not `"`, CR, LF | `--format csv` |
+| `--csv-quote` | `minimal`, `strings`, `all` | `--format csv` |
+| `--csv-decimal` | `.`, `,`; must differ from delimiter | `--format csv` |
+| `--csv-no-header` | switch | `--format csv` |
+| `--template` | HTML file | `--format html` |
+| `--var` | `NAME=VALUE`, repeatable; NAME `[A-Za-z_][A-Za-z0-9_]*` | `--format html` |
+| `--logo` | `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp` | `--format html` |
+| `--title` | text | `--format html` |
+| `--lines` | integer > 0 | `--format html` |
 
-after regiao
-   print 'Total ' + regiao in col 1, total(valor) in col 30 using '#,###,##&.&&'
+### Exit codes and errors
+
+| Code | Meaning | Examples |
+|---|---|---|
+| 0 | Success | Report written; `--check` prints `Script sem erros de sintaxe.` |
+| 1 | Script, data or I/O error | Parse error, `phase error`, invalid value, invalid CSV/JSON, template error |
+| 2 | Invalid usage | Unknown option, bad value, illegal combination, missing script |
+
+- Errors go to stderr as `<program>: <message>`; usage errors add `Tente '<program> --help' para mais informações.`
+- Lexer and parser errors show `linha N:`, the source line (72-rune excerpt, `...` on cut sides) and carets under the word:
+
+```
+rptgo: linha 1: tipo desconhecido 'numerc' na coluna 'valor'; tipos válidos: string, text, numeric, integer, long, int, float, amount, double, real, huge, date, ldate, time, bool
+  1 | input nome, valor [numerc] end
+                         ^^^^^^
+```
+
+### Script language
+
+```
+input  name [type size] [sorted], ...
+width N | length N | top margin N | bottom margin N | left margin N
+separator 'C'
+sort   [<name>] expr [desc], ...
+header | footer | detail | before report|NAME | after report|NAME
 end
 ```
 
-Data (`dados.txt`, pipe-delimited):
+| Statement | Form |
+|---|---|
+| print | `print [<name>] expr [[in] col\|column expr] [using expr] [centered], ... [no newline]` |
+| skip | `skip [N]` |
+| page | `page [, no footer] [, no header]` |
+| need | `need N` |
+| set | `set NAME to expr` |
+| if | `if expr then stmt\|block [else stmt\|block]` |
+| block | `begin ... end` |
 
-```
-Sul|Ana Souza|1250.50
-Norte|Bruno Lima|980.00
-```
+- Types: `string`, `text`, `numeric`, `integer`, `long`, `int`, `float`, `amount`, `double`, `real`, `huge`, `date`, `ldate`, `time`, `bool`.
+- Literals: integer, decimal, `'text'` or `"text"` (single line, `\` escapes), `N[c]` repeats a character, date `d/m/y`, time `H:MM`, `null`.
+- Operators: `= <> != ^= < > <= >=`, `is [not] null`, `and or not`, `+ - * / % /+`, `substr [a-b]`.
+- Functions: `dow`, `mdy`, `index`, `count`, `total`, `avg`, `min`, `max`; calls accept `*` and `where` for aggregation. Built-ins: `today`, `hour`, `pageno`.
 
-### JSON output (`--format json`)
+### Input data
 
-One object per line inside an array, keys in `input` order, sorted by `sort`; empty set prints `[]`. Event sections do not run.
+| `--input` | Record shape | Column binding | Header row |
+|---|---|---|---|
+| `delimited` | 1 line per record, split by script `separator`; no quoting; 1 trailing empty field tolerated | Position | `--header`; `auto` skips when first field equals first column name |
+| `csv` | RFC 4180 with lazy quotes; BOM stripped | Position | Same rule |
+| `json` | Array of objects or consecutive objects; BOM stripped | Key name: exact, then case-insensitive | Not applicable |
 
-```json
-[
-{"regiao":"Leste","vendedor":"Diego Alves","valor":450.25},
-{"regiao":"Leste","vendedor":"Fabio Neri","valor":780},
-{"regiao":"Norte","vendedor":"Bruno Lima","valor":980}
-]
-```
-
-### CSV output (`--format csv --csv-delimiter ';' --csv-decimal ',' --csv-quote strings`)
-
-```
-"regiao";"vendedor";"valor"
-"Leste";"Diego Alves";450,25
-"Leste";"Fabio Neri";780
-```
-
-### CSV and JSON input
-
-```
-regiao;vendedor;valor
-Sul;Ana Souza;1.250,50
-Norte;Bruno Lima;980,00
-```
-
-Run with `--input csv --input-decimal auto` (or `,`). Without it, `1.250,50` fails: `valor inválido em 'valor' (registro 1)`. JSON input is an array of objects or one object per line:
+JSON input (`examples/conversao-formatos/clientes.json`):
 
 ```json
 [
-  {"regiao": "Sul", "vendedor": "Ana Souza", "valor": 1250.50},
-  {"regiao": "Norte", "vendedor": "Bruno Lima", "valor": 980.00}
+{"id":1,"nome":"Ana Souza","cidade":"Curitiba","cadastro":"2026-01-15","ativo":true,"limite":1500.5},
+{"id":2,"nome":"Bruno Lima","cidade":"São Paulo","cadastro":"2025-07-04","ativo":false,"limite":-250},
+{"id":3,"nome":"Carla Dias","cidade":"Recife, PE","cadastro":null,"ativo":true,"limite":null}
 ]
 ```
 
-### HTML template (`--format html`)
+- Missing key or `null`: empty field. Extra keys ignored.
+- Errors: column absent from every record; nested object or array in a bound key; array item that is not an object; top-level scalar.
 
-| Placeholder | Scope | Value |
+Delimited input (`examples/conversao-formatos/clientes.txt`):
+
+```
+1|Ana Souza|Curitiba|15/01/2026|yes|1500.50
+2|Bruno Lima|São Paulo|04/07/2025|no|-250
+3|Carla Dias|Recife, PE||yes|
+```
+
+Brazilian Excel CSV (`examples/relatorio-vendas-regiao/dados-excel-br.csv`; read with `--input csv --input-decimal auto`):
+
+```
+regiao;vendedor;data_venda;valor
+Norte;Bruno Lima;11/12/2025;980,00
+Sul;Ana Souza;02/12/2025;1.250,50
+```
+
+### Output data
+
+| Value | JSON | CSV |
 |---|---|---|
-| `{{Title}}` | global | `--title` or script base name |
-| `{{Script}}` | global | script file name |
-| `{{Date}}`, `{{Time}}` | global | `2006-01-02`, `15:04` from `RPT_NOW` or clock |
-| `{{Columns}}` | global | widest page line in runes |
-| `{{PageCount}}` | global | number of pages |
-| `{{Logo}}` | global | data URI of `--logo`, else empty |
-| `{{Name}}` | global | each `--var NAME=VALUE` |
-| `{{#Pages}} ... {{/Pages}}` | block | repeated per page; exactly one block, not nested |
-| `{{PageNumber}}`, `{{Text}}` | in block | page index, page text |
+| null | `null` | empty |
+| int, float | number | shortest decimal; `--csv-decimal` applies to floats |
+| bool | `true` / `false` | `true` / `false` |
+| date, ldate | `"YYYY-MM-DD"` | `YYYY-MM-DD` |
+| time | `"HH:MM:SS"` | `HH:MM:SS` |
+| string | string | text |
 
-- All values HTML-escaped. Unknown variable, bad marker, missing or unbalanced block = error (exit 1) with template line.
-- Without `--template`, a built-in A4 template renders (`modeloPadrao`).
+JSON output of the delimited input above, script `examples/conversao-formatos/colunas.rp`:
 
-### Error message shape
-
-```
-rptgo: valor inválido em 'valor' (registro 1): "1.250,50" (strconv.ParseFloat: parsing "1.250,50": invalid syntax)
-  1 | regiao;vendedor;valor
-      ^^^^^^^^^^^^^^^^^^^^^^^^
+```json
+[
+{"id":1,"nome":"Ana Souza","cidade":"Curitiba","cadastro":"2026-01-15","ativo":true,"limite":1500.5},
+{"id":2,"nome":"Bruno Lima","cidade":"São Paulo","cadastro":"2025-07-04","ativo":false,"limite":-250},
+{"id":3,"nome":"Carla Dias","cidade":"Recife, PE","cadastro":null,"ativo":true,"limite":null}
+]
 ```
 
-Script errors print `linha N: <message>` plus the source line and `^` marker.
+CSV output of the same data:
 
-### Message formats
+```
+id,nome,cidade,cadastro,ativo,limite
+1,Ana Souza,Curitiba,2026-01-15,true,1500.5
+2,Bruno Lima,São Paulo,2025-07-04,false,-250
+3,Carla Dias,"Recife, PE",,true,
+```
 
-Not applicable: no queues, topics or async messaging.
+- JSON: 1 object per line, keys in `input` order; zero rows give `[]`.
+- CSV: header from `input` names; zero rows give the header only; `minimal` quotes fields with delimiter, quote, newline or leading blank; `strings` also quotes text and header; `all` quotes every field; a lone empty field writes `""`.
+- Text: pages of `length` lines, or `\f`-separated with `--form-feed`; encoded per `--encoding`; unmappable characters become `?`.
+- HTML: always UTF-8.
+
+### HTML template
+
+- `{{Name}}` inserts an HTML-escaped value; `{{#Pages}}...{{/Pages}}` repeats per page and is required exactly once.
+
+| Variable | Scope | Value |
+|---|---|---|
+| `Title` | global | `--title`; else script file name without extension; `rptgo` with `-e` |
+| `Script` | global | Script file name; empty with `-e` |
+| `Date`, `Time` | global | Report clock, `YYYY-MM-DD`, `HH:MM` |
+| `Columns` | global | Longest line in runes, minimum 1 |
+| `PageCount` | global | Page total |
+| `Logo` | global | `data:` URI of `--logo`, else empty |
+| `--var` names | global | Given value; built-in names are rejected |
+| `PageNumber`, `Text` | page block | Page index from 1, page text |
+
+- No `--template`: built-in A4 template (`modeloPadraoHTML`).
+- Errors with template line: unknown variable, invalid marker, unclosed `{{`, page variable outside the block, unbalanced or repeated block.
+
+### Environment variables
+
+| Name | Default | Effect |
+|---|---|---|
+| `DATEFMT` | `DD/MM/YY` | Date field order and print layout |
+| `CENTURY_CUTOFF` | `30` | 2-digit year pivot |
+| `TIMEFMT` | `HH:MM` | Time print layout (`SS` supported) |
+| `WIDTH` | `80` | Default page width |
+| `PAGELN` | `66` | Default page length |
+| `SEPARATOR` | `\|` | Default delimited field separator |
+| `RADIXSEP` | `.` | Decimal point in native masks |
+| `CURRSYM` | `$` | Currency symbol in masks |
+| `TRIADSEP` | `,` | Thousands separator in masks; absent from `--help` |
+| `RPT_NOW` | system clock | Fixed clock: `YYYY-MM-DD HH:MM[:SS]` or RFC 3339 |
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — rules behind input detection and output values
-- [`project_overview.md`](project_overview.md) — run flow and consumers
-- [`architecture.md`](architecture.md) — where options and writers live
+- [`domain_rules.md`](domain_rules.md) — evaluation, breaks, masks
+- [`project_overview.md`](project_overview.md) — flow and consumers
+- [`data_model.md`](data_model.md) — in-memory representation

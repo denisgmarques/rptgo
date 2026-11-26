@@ -4,46 +4,63 @@
 
 ## AS IS — Current state
 
-No linter, formatter config, `.editorconfig` or pre-commit hook exists in the repo; the patterns below are observed in source and tests.
+### 1. Standard library only
 
-### 1. pt-BR identifiers and comments
+- Zero third-party modules keeps one self-contained binary: `go.mod` has no `require` block; tests use stdlib assertions.
 
-- Types, functions, fields and comments use Portuguese: `Interp`, `LinhasOrdenadas`, `detectaDelimitadorCSV`, `csvOpcoes`, `verificaTipos`, `leRegistrosJSON`.
-- Doc comments precede each function and state the rule, not the mechanics (`cmd/rptgo/entrada.go`, `internal/report/tipos.go`).
-- Docs under `docs/` are English (`.claude/rules/bc-harness.md`).
+### 2. Portuguese identifiers, comments and messages
 
-### 2. Standard library only
+- Names, comments, help and error text are pt-BR: `executar`, `analisaArgs` (`cmd/rptgo/main.go`), `verificaOrdenacao` (`internal/report/ordenacao.go`).
+- Script language keywords are English (`input`, `sort`, `before`, `print`; `parser.go`).
+- Specs and `docs/` are English (`.claude/rules/bc-harness.md`).
 
-- No third-party packages; `go.mod` has no `require` and no `go.sum`.
-- Option parsing is a manual `switch` in `analisaArgs` (`cmd/rptgo/main.go`) instead of the `flag` package, to accept options and positionals in any order.
-- CSV, JSON, templates and box drawing are hand-built on `encoding/csv`, `encoding/json`, `regexp` (`entrada.go`, `json.go`, `html.go`, `box.go`).
+### 3. Testable CLI entrypoint
 
-### 3. Errors carry source context
+- `main()` only sets the program name and exits with `executar(args, stdin, stdout, stderr) int`; tests drive `executar` in process (`main_test.go` helper `executa`, `erros_script_cli_test.go`).
 
-- Interpreter errors use `Erro`, `ErroLinhaScript`, `ErroLinhaDados` (`internal/report/errors.go`); the line variants print the source line and a `^` marker.
-- CLI prints `rptgo: <message>` to stderr and returns 1 for script, data, I/O or template errors; 2 for usage errors (`executar`, `erroUso`).
-- Option validation lives in `analisaArgs`; option combinations are rejected up front (for example `--csv-*` only with `--format csv`, `--template`/`--var`/`--logo`/`--title`/`--lines` only with `--format html`, `--form-feed` only with text).
+### 4. Manual argument parsing
 
-### 4. One record list for every input source
+- `analisaArgs` accepts options and positionals in any order instead of package `flag` (`main.go`).
+- Allowed values live in package lists checked with `contem`: `valoresHeader`, `valoresFormato`, `valoresEncoding` (`ajuda.go`), `valoresInput` (`entrada.go`).
+- Help text is a separate hand-written string (`textoAjuda`), enforced by `ajuda_test.go` `TestAjudaListaTodasAsOpcoes`.
+- Combination rules are validated after the parse loop and return usage errors (exit 2).
 
-- Delimited, CSV and JSON readers all return `[][]string`; typing happens once in `Interp.converte`/`tipa` (`entrada.go`, `interp.go`).
-- New input sources must not convert types themselves; decimal rewriting stays in `ajustaDecimalEntrada`.
+### 5. One error type in the interpreter
 
-### 5. Output writers separate from the interpreter
+- `report` returns `*Error`, built by `Erro`, `erroDeTipo`, `ErroLinhaScript`, `ErroLinhaDados`, `erroNaPalavra` (`errors.go`).
+- Parser errors point at a token through `ps.erroEm` / `ps.errf` (`parser.go`); caret placement enforced by `erro_script_test.go`.
+- Wrong value types stop the report with a message, never a panic; enforced by `falhas_test.go` `TestTiposErradosNaoDerrubam`.
+- CLI errors use `fmt.Errorf` and print as `<program>: <message>` on stderr (`main.go`, `entrada.go`, `html.go`).
 
-- Text and HTML pages come from `Interp.Run` / `Interp.Paginas`; CSV and JSON take `Interp.LinhasOrdenadas()` and read only `Script.Input` (`cmd/rptgo/csv.go`, `json.go`).
-- Dates in CSV/JSON are always `2006-01-02` (`formatoISO`), independent of `DATEFMT`.
-- JSON objects are assembled by hand to keep declared key order.
+### 6. Marker interfaces and type switches
 
-### 6. Tests pin behavior
+- `Expr` and `Stmt` carry only `exprNode()` / `stmtNode()`; behavior sits in type switches (`Interp.ev`, `Interp.exec` in `interp.go`; `verificaExpr` in `tipos.go`).
+- Runtime values are `type Value = any` (`value.go`).
 
-- Table-driven tests with named cases (`TestLeRegistrosCSV`, `TestDetectaDelimitadorCSV`).
-- Golden baselines in `internal/report/testdata/golden/`, refreshed with `-update`.
-- README blocks are executed by `cmd/rptgo/readme_test.go`; edit README and scripts together.
-- `RPT_NOW` fixes the clock for reproducible output.
+### 7. Fail at parse time
+
+- Script checks run inside `Parse` before data is read (arity, column types, sort keys, logical types), so `--check` reports them; enforced by `erros_script_cli_test.go` (exit 1, stdin unread, no `-o` file).
+- Exception: `before`/`after` targets and variable/column name clashes are checked in `NovoInterp` (`verificaEventos`).
+
+### 8. Rune-based positions
+
+- Token columns, error markers, line truncation and substrings count runes (`lexer.go` `indexRunas`, `errors.go`, `interp.go` `recortaRunas`, `html.go` `colunasMax`).
+- Byte-based exceptions: `QuebraTexto` wrap width and mask symbols `CURRSYM` / `TRIADSEP` (`format.go`).
+
+### 9. Environment configuration through helpers
+
+- Formatting settings read via `cfg(name, default)` (`config.go`; used in `dates.go`, `format.go`); integer page settings via `cfgInt` (`parser.go`).
+- The clock comes from `agora()`, overridable by `RPT_NOW`, for reproducible output (`config.go`).
+
+### 10. Tests pin behavior
+
+- Golden text output with fixed clock and unset env config, regenerated with `-update` (`golden_test.go`).
+- Table-driven cases with `t.TempDir` / `t.Setenv` (`script_texto_test.go`, `falhas_test.go`, `golden_test.go`).
+- Every `examples/*/*.rp` and golden `.rp` passes `--check` (`regressao_script_test.go`).
+- Documented commands, outputs and file blocks match real behavior (`readme_test.go` `TestReadmeBlocosConferem`, `TestReferenciaExemplos`).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — package boundaries these patterns follow
+- [`architecture.md`](architecture.md) — layer boundaries
+- [`tech_stack.md`](tech_stack.md) — test and build commands
 - [`domain_rules.md`](domain_rules.md) — behavior the tests pin
-- [`tech_stack.md`](tech_stack.md) — toolchain and test setup

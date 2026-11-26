@@ -18,75 +18,105 @@
 | `go build -o rptgo ./cmd/rptgo` | Build CLI binary |
 | `go test ./...` | Run all tests |
 | `go test ./internal/report -run Golden -update` | Regenerate golden baselines (`internal/report/golden_test.go`) |
-| `bash scripts/render-readme-images.sh` | Regenerate `docs/images/*.png` (sets `RPT_NOW="2026-06-30 09:00"`; needs Go, Chrome, `pdftoppm`) |
+| `go test -run '^$' -bench Converte200k -benchmem ./internal/report/` | Benchmark interpreter conversion |
+| `go test -run '^$' -bench Entrada -benchmem ./cmd/rptgo` | Benchmark input readers |
+| `bash scripts/render-readme-images.sh` | Regenerate `docs/images/*.png`; needs Go, Chrome or Chromium, `pdftoppm` |
+| `python3 scripts/render-readme-demo.py` | Regenerate `docs/images/demo.gif`; needs Go, `curl`, Python 3 with Pillow |
 
-- Test runner: Go stdlib `testing`.
-- `cmd/rptgo/readme_test.go` verifies marked code blocks in `README.md`, `SAIDA-HTML.md`, `examples/*/README.md`, and `REFERENCIA.md` examples, plus README links and images.
-- Benchmarks: `internal/report/bench_test.go`, `cmd/rptgo/bench_entrada_test.go`.
+Benchmark input and report together:
+
+```sh
+go test -run '^$' -bench 'Entrada|Relatorio' -benchmem ./cmd/rptgo
+```
+
+- Test runner: Go stdlib `testing`; assertions via `t.Errorf` / `t.Fatalf`.
+- No third-party mocks; helpers are hand-written.
+- CI: none configured.
 - Lint: none configured.
+- Format: no command configured.
 - Coverage: none configured.
 
 ## 2. Code Style & Project Conventions
 
-- Language: Go 1.25 (`go.mod`, module `rptgo`). Stdlib only, no `go.sum`.
-- Identifiers and code comments under `cmd/` and `internal/`: pt-BR.
-- Docs and specs: English (`.claude/rules/bc-harness.md`). `README.md`, `REFERENCIA.md`, `SAIDA-HTML.md` are pt-BR today.
-- `internal/report`: lexer, parser, ast, interp, value, format, dates, golden tests.
-- `cmd/rptgo` (package `main`): flags, input readers, output formats, tests.
-- Golden baselines: `internal/report/testdata/golden/`.
-- Doc blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` (README, SAIDA-HTML, example READMEs) and `<!-- script -->`, `<!-- data -->`, `<!-- output -->`, `<!-- error -->` (REFERENCIA) must match real files and output (`cmd/rptgo/readme_test.go`).
-- Header runs on page 1 right after `before report`; `--strict` restores the old rule and forces `/* */` comments onto one line (`Interp.Strict`, `internal/report/interp.go`, set from `cmd/rptgo/main.go`).
-- Bare `today` prints as ldate (4-digit year); `--strict` keeps it a date (2-digit year) (`Interp.ehLdate`, `internal/report/interp.go`).
-- Env config: `RPT_NOW`, `TRIADSEP`, `RADIXSEP`, `CURRSYM`, `DATEFMT`, `TIMEFMT`, `CENTURY_CUTOFF`, `WIDTH`, `PAGELN`, `SEPARATOR`.
-- `RPT_NOW` fixes the clock.
-- Input sources: `--input delimited|csv|json`; `--input-delimiter`; `--input-decimal . , auto`.
-- Column type `time` exists.
-- Language behavior is pinned by tests under `internal/report` and `cmd/rptgo`.
+- Language: Go, `go 1.25` in `go.mod`, module `rptgo`.
+- Dependencies: Go standard library only; no `require` block, no `go.sum`.
+- `cmd/rptgo` (package `main`): argument parsing, help, input readers, output writers.
+- `internal/report`: interpreter (lexer, parser, AST, static checks, execution, values, masks, dates, errors).
+- Identifiers, comments, help text and error messages under `cmd/` and `internal/`: pt-BR.
+- Specs and everything under `docs/`: English (`.claude/rules/bc-harness.md`).
+- Translate existing pt-BR docs to English when next touched (`.claude/rules/bc-harness.md`).
+- Terminology: `count`, `total`, `avg`, `min`, `max` are "aggregation functions"; sort-key group changes are "breaks" / "control breaks".
+- Lexer and parser errors: `linha N: msg`, source line, carets under offending word (`internal/report/errors.go`; pinned by `internal/report/erro_script_test.go`, `cmd/rptgo/erros_script_cli_test.go`).
+- Script errors stay identical for `.rp` file and `-e`; exit 1, stdin unread, no `-o` file (`cmd/rptgo/erros_script_cli_test.go`).
+- Exit codes: 0 ok; 1 script, data or I/O error; 2 invalid usage (`cmd/rptgo/main.go`).
+- Sort key, name and type checks run in `Parse`, before data is read, also under `--check` (`internal/report/parser.go`).
+- Every `examples/*/*.rp` and golden `.rp` passes `--check` (`cmd/rptgo/regressao_script_test.go`).
+- Examples keep asserted totals and outputs (`cmd/rptgo/examples_test.go`).
+- Text-mode output matches `internal/report/testdata/golden/` (`internal/report/golden_test.go`).
+- `README.md`, `SAIDA-HTML.md`, `examples/*/README.md` blocks marked `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` are verified (`cmd/rptgo/readme_test.go`).
+- `REFERENCIA.md` blocks marked `<!-- script -->`, `<!-- data -->`, `<!-- output: -->`, `<!-- error: -->` are verified (`cmd/rptgo/readme_test.go`).
+- README images and links must exist (`cmd/rptgo/readme_test.go`).
 - Details: [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md).
 
 ## 3. Agent Communication & Behavioral Guidelines
 
-- Follow the workflows in `.claude/rules/bc-harness.md`.
-- Write docs and specs in English.
+- Use `/bc-harness:plan` for new features, changes and fixes needing a spec; use `/bc-harness:init` for project specs, `/bc-harness:ai-context` for context docs (`.claude/rules/bc-harness.md`).
+- Keep specs and docs in English, including when the developer prompts in Portuguese.
 - Run `go test ./...` after code changes.
 
 ### Never in this repository
 
-- Never hand-edit generated files (`AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`); `.claude/rules/bc-harness.md` forbids it.
-- Never add external dependencies; `go.mod` has none.
-- Never leave marked doc blocks out of sync with scripts or output; `cmd/rptgo/readme_test.go` fails.
+- Never hand-write or hand-edit workflow-owned files: `.spec/**`, `AGENTS.md`, `CLAUDE.md`, `docs/agents/*.md`. Re-run the matching command (`.claude/rules/bc-harness.md`).
+- Never write application code during `/bc-harness:plan` (`.claude/rules/bc-harness.md`).
+- Never put manual rules in `AGENTS.md` or `CLAUDE.md`; use `.claude/rules/` (`.claude/rules/bc-harness.md`).
+- Never leave marked doc blocks out of sync with scripts or output (`cmd/rptgo/readme_test.go`).
+- Never commit an example or golden `.rp` script that fails `--check` (`cmd/rptgo/regressao_script_test.go`).
 
 ## 4. Setup, Troubleshooting and Tips
 
-- Prereq: Go 1.25. Image regeneration also needs Chrome and `pdftoppm`.
+- Prereq: Go 1.25.
+- Output: single static binary, no runtime dependencies.
 
 ```sh
 go build -o rptgo ./cmd/rptgo
 ./rptgo --help
-./rptgo [options] script.rp [data.txt | -]
+./rptgo [options] SCRIPT.rp [INPUT | -]
+./rptgo [options] -e 'SCRIPT' [INPUT | -]
 ```
 
-- CLI flags: `--format text|csv|json|html`, `--box`, `--input delimited|csv|json`, `--input-delimiter`, `--input-decimal`, `--template`, `--var`, `--logo`, `--title`, `--encoding`, `--form-feed`, `--strict`.
-- `examples/feriados-brasil/run.sh` pipes JSON from `curl` into `rptgo`.
+- No data file, or `-`: read stdin.
+- `-r` / `--check`: parse script only, run no data.
+- `-e` / `--script`: inline script, replaces `SCRIPT.rp`, taken as UTF-8.
+- Output formats: `--format text|csv|json|html`; `csv` and `json` use only `input` and `sort`.
+- Input formats: `--input delimited|csv|json`.
+- `--csv-*` options require `--format csv`; `--template`, `--var`, `--logo`, `--title`, `--lines` require `--format html`.
+- Env vars: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `TRIADSEP`, `RPT_NOW`.
+- `RPT_NOW` fixes the clock: `2006-01-02 15:04[:05]` or RFC3339.
+- `examples/feriados-brasil/run.sh` pipes BrasilAPI JSON from `curl` into `rptgo`.
 
 | Symptom | Check |
 |---|---|
-| Non-deterministic dates in output | Set `RPT_NOW` |
+| Exit code 2 | Option names and combinations; run `./rptgo --help` |
+| `phase error` | Record field count equals `input` column count; delimited input tolerates 1 trailing empty field |
+| `não há registros de entrada` | Text or HTML run received 0 records |
+| `no sort: ...` | Sort key type mismatch: date compared with number, or `dow()` / `mdy()` on non-date |
+| `?` in `cp850` output | Character has no CP850 mapping |
+| CRLF line endings on Windows | Pass `--newline lf` |
+| Dates differ between runs | Set `RPT_NOW` |
 | Golden test fails after intended change | Run golden update command from section 1 |
 | Doc block test fails | Re-sync block with file or command output |
-| Rejected option combination | Read the error; run `./rptgo --help` |
 
 ## 5. References
 
 | Doc | Purpose |
 |---|---|
-| [README.md](README.md) | User docs (pt-BR): usage, examples |
+| [README.md](README.md) | User docs (pt-BR): usage, format conversion, examples |
 | [REFERENCIA.md](REFERENCIA.md) | Language reference (pt-BR), verified by tests |
-| [SAIDA-HTML.md](SAIDA-HTML.md) | HTML output page, verified by tests |
-| [LICENSE](LICENSE) | MIT license (linked from README "Licença" section) |
-| [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English docs |
-| [examples/](examples) | 9 example dirs, each with script, data and README.md or run.sh |
-| [scripts/render-readme-images.sh](scripts/render-readme-images.sh) | README image generator |
+| [SAIDA-HTML.md](SAIDA-HTML.md) | HTML output and boxes (pt-BR), verified by tests |
+| [examples/](examples) | 10 example dirs |
+| [examples/conversao-formatos/README.md](examples/conversao-formatos/README.md) | Layout-free conversion between delimited text, CSV and JSON |
+| [.claude/rules/bc-harness.md](.claude/rules/bc-harness.md) | Project rule: bc-harness workflows, English specs and docs |
+| [LICENSE](LICENSE) | MIT license |
 
 ## 6. Agent Documentation
 
@@ -95,10 +125,10 @@ go build -o rptgo ./cmd/rptgo
 | [docs/agents/project_overview.md](docs/agents/project_overview.md) | Project purpose and scope |
 | [docs/agents/architecture.md](docs/agents/architecture.md) | CLI and interpreter structure, data flow |
 | [docs/agents/tech_stack.md](docs/agents/tech_stack.md) | Go version, tooling, runtime |
-| [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md) | Code style and conventions |
+| [docs/agents/coding_guidelines.md](docs/agents/coding_guidelines.md) | Code style, conventions, testing |
+| [docs/agents/domain_rules.md](docs/agents/domain_rules.md) | Sorting, control breaks, aggregation functions, pagination, masks |
 | [docs/agents/api_contracts.md](docs/agents/api_contracts.md) | CLI flags, exit codes, `.rp` language contract |
 | [docs/agents/data_model.md](docs/agents/data_model.md) | Values, records, formats |
-| [docs/agents/dependencies.md](docs/agents/dependencies.md) | Dependencies (none external) |
-| [docs/agents/domain_rules.md](docs/agents/domain_rules.md) | Sorting, breaks, accumulators, pagination, masks |
+| [docs/agents/dependencies.md](docs/agents/dependencies.md) | Go standard library use, external script tools |
 
 _End of AGENTS.md_

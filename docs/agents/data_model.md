@@ -6,15 +6,27 @@
 
 ### Not applicable in this repository
 
-No persistence layer exists: no migrations directory, no ORM models, no schema files and no database driver in the manifest (`go.mod` has no `require`). Input is read once per run from a file or stdin and output is written to stdout or a file. Only per-run in-memory state exists:
+No persistence layer: `go.mod` has no `require` block (no database driver or ORM), the tree has no migrations directory, schema files or ORM models, and `cmd/rptgo/main.go` reads the script and data from files or stdin and writes only to stdout or the `-o` file.
 
-- `Row = []Value` (`internal/report/interp.go`), positional by `Script.Input` order; `Interp.colIdx` maps column name to index.
-- `Value = any`: `nil` (null), `int64`, `float64`, `string`, `bool`, `time.Time` (`internal/report/value.go`).
-- `Script` AST: `Input []InputCol{Name, Type, Len, HasLen}`, `Sort []SortKey`, `Events map[EventKey][]Stmt`, `Variaveis`, `Nomeadas` (`internal/report/ast.go`).
-- `Interp.vars` holds `set` variables; `paginas [][]string` holds rendered pages.
-- No cache. The whole data file is read into memory (`io.ReadAll`) before processing.
+### Cache
+
+- No cache. Each run holds the whole dataset in memory and discards it on exit (`io.ReadAll` in `executar`).
+
+| Structure | Definition | Holds |
+|---|---|---|
+| `Script` | `internal/report/ast.go` | `Input` columns, page settings, `Sort` keys, `Events` by `(Kind, Target)`, `Variaveis`, `Nomeadas` |
+| `InputCol` | `ast.go` | `Name`, `Type`, `Len`, `HasLen` |
+| Raw records | `[][]string` | Fields from the input adapter |
+| `Row` | `interp.go` (`= []Value`) | Typed record in `input` order; names resolve through 1 shared `colIdx` map |
+| `Value` | `value.go` (`= any`) | nil, `int64`, `float64`, `string`, `time.Time`, `bool`, `Hora` |
+| `Hora` | `dates.go` | Seconds since midnight |
+| `Interp` | `interp.go` | Sorted rows, variables, current group, line buffer, finished pages, report clock |
+| `FonteScript`, `FonteDados` | `errors.go` | Source lines for error context |
+
+- `BenchmarkConverte200k` (`internal/report/bench_test.go`) measures memory retained by 200,000 converted records.
 
 ## Related documents
 
-- [`domain_rules.md`](domain_rules.md) — typing and conversion of records
-- [`architecture.md`](architecture.md) — where the in-memory state lives
+- [`domain_rules.md`](domain_rules.md) — column typing and value semantics
+- [`api_contracts.md`](api_contracts.md) — input and output formats
+- [`architecture.md`](architecture.md) — layers that own each structure

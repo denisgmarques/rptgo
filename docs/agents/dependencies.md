@@ -6,23 +6,32 @@
 
 ### External services
 
-None. The program makes no network calls (no `net/http` or client packages in `cmd/rptgo` or `internal/report`).
+The binary calls no service. Only example scripts reach the network.
+
+| Service | Purpose |
+|---|---|
+| BrasilAPI (`brasilapi.com.br/api/feriados/v1`) | Holiday JSON for `examples/feriados-brasil/run.sh`; also the demo generator, with offline fallback `examples/feriados-brasil/dados-2026.json` |
+| FIPE API (`fipe.parallelum.com.br/api/v2`) | Vehicle price JSON for `examples/fipe-veiculos/run.sh`; daily call limit noted in the script |
 
 ### Internal libraries
 
 | Package | Role |
 |---|---|
-| `rptgo/internal/report` | Interpreter: tokenize, parse, type check, evaluate, paginate, masks, dates; imported by `cmd/rptgo` |
+| `rptgo/internal/report` | Interpreter used by `cmd/rptgo` |
 
-### Shared infrastructure
+- Third-party Go modules: 0 (`go.mod` has no `require` block).
 
-- Go 1.25 toolchain (`go.mod`); module `rptgo` with 0 third-party modules and no `go.sum`.
-- Standard library: `encoding/csv`, `encoding/json`, `regexp`, `time`, `sort`, `strconv`, `bufio`, `os`, `io`, `encoding/base64`, `html`.
-- Environment: `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM`, `RPT_NOW`.
-- Docs tooling only (`scripts/render-readme-images.sh`): headless browser and `pdftoppm`.
-- No CI, Makefile, queue, cache or observability stack.
+### Script tooling
+
+| Tool | Purpose |
+|---|---|
+| Google Chrome / Chromium | HTML to PDF in `scripts/render-readme-images.sh` |
+| poppler-utils (`pdftoppm`) | PDF to PNG in the same script |
+| Python 3 + Pillow | `scripts/render-readme-demo.py` |
+| curl | Example `run.sh` scripts and demo generator |
+| Go toolchain | Build, tests, asset scripts |
 
 ## Related documents
 
-- [`tech_stack.md`](tech_stack.md) — language and test tooling
-- [`architecture.md`](architecture.md) — package boundaries
+- [`tech_stack.md`](tech_stack.md) — versions and commands
+- [`architecture.md`](architecture.md) — integration points

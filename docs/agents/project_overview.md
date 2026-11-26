@@ -6,51 +6,47 @@
 
 ### Purpose
 
-`rptgo` is a Go command-line tool that runs a report script (`.rp`) over delimited, CSV or JSON records and writes a paginated text report, or HTML, CSV or JSON.
+- `rptgo` runs a short report script over text data and writes a paginated text report, HTML for PDF printing, CSV or JSON (`cmd/rptgo/main.go`, `README.md`).
 
 ### Business problem
 
-- Fixed-width, paginated reports with control breaks (`before`/`after` sort keys, `total`/`count`/`avg`/`min`/`max`) need a script language, not ad-hoc code.
-- Printer-oriented output needs print features: page length, margins, form feed, CRLF, `latin-1`/`cp850` encodings, box drawing (`cmd/rptgo/main.go`, `cmd/rptgo/box.go`, `cmd/rptgo/cp850.go`).
-- Spreadsheet-style CSV (`;` delimiter, `1.250,50` decimals, BOM) and JSON must feed the same script as the pipe-delimited file (`cmd/rptgo/entrada.go`).
+- Hand-written code for aligned columns, per-page header and footer, cascading control breaks and per-level totals, counts and averages is laborious (`README.md`); the script declares them with `sort`, `before`, `after` and the aggregation functions `count`, `total`, `avg`, `min`, `max`.
+- Conversion between delimited text, CSV and JSON needs only an `input` list and optional `sort`, no layout (`examples/conversao-formatos/`).
+- Matrix-printer output needs form feed, CRLF and CP850 (`--form-feed`, `--newline`, `--encoding cp850`).
+- Single static binary, standard library only (`go.mod` has no `require` block).
 
 ### Consumers and integrations
 
 | System | Role |
 |---|---|
-| Shell / operator | Runs `rptgo [options] script.rp [data | -]`; reads stdout, stderr, exit code |
-| stdin (`-`) | Default data source when the second positional is absent |
-| Files | `.rp` script, data file, `--template` HTML, `--logo` image, `-o` output |
-| Downstream printers/tools | Consume text (UTF-8, `latin-1`, `cp850`), HTML, CSV, JSON |
-| `RPT_NOW`, `DATEFMT`, `CENTURY_CUTOFF`, `TIMEFMT`, `WIDTH`, `PAGELN`, `SEPARATOR`, `RADIXSEP`, `CURRSYM` | Environment configuration read in `internal/report` |
+| Shell user or shell script | Runs the binary with a `.rp` file or `-e 'SCRIPT'` (`cmd/rptgo/main.go`) |
+| Data file or stdin | Delimited text, CSV or JSON input (`cmd/rptgo/entrada.go`) |
+| stdout or `-o` file | Report destination (`escreveArquivo`) |
+| Web browser | Prints `--format html` output to PDF (`README.md`; `scripts/render-readme-images.sh` uses headless Chrome) |
+| BrasilAPI holidays API | JSON piped in by `examples/feriados-brasil/run.sh` |
+| FIPE vehicle API | JSON piped in by `examples/fipe-veiculos/run.sh` |
 
 ### Macro flow
 
-1. `main` scans args for `-h`/`--help` (exit 0), then `analisaArgs` validates options (exit 2 on usage error).
-2. Read the script file, decode by `--encoding`, `report.Tokenize` then `report.Parse` (includes `verificaTipos`, `verificaNomes`). `--check`/`-r` stops here with exit 0.
-3. Read all data from the file or stdin, decode by `--encoding`.
-4. Build records `[][]string`: `delimited` (script separator, default `|`), `csv` (`encoding/csv`, delimiter auto-detect) or `json` (array of objects or one object per line).
-5. Optional decimal fix: `--input-decimal ','` or detected `auto` rewrites numeric columns (`ajustaDecimalEntrada`).
-6. `report.NovoInterp` converts records to typed `Row` values by the declared `input` column types; arity mismatch is a `phase error`.
-7. Output by `--format`:
-   - `text` (default): `Interp.Run` paginates; optional `--box`, CRLF, encoding.
-   - `html`: `Interp.Paginas` then template render (`montaHTML`).
-   - `csv` / `json`: `Interp.LinhasOrdenadas` (only `input` and `sort` apply; no event sections run).
-8. Write to stdout or `-o` file; exit 0. Any script, data, I/O or template error prints `rptgo: <message>` and exits 1.
-
-### License
-
-- MIT (`LICENSE`; linked from the `Licença` section of `README.md`).
+1. Parse arguments; invalid usage exits 2 (`analisaArgs`). `-h`/`--help` anywhere prints help and exits 0.
+2. Take the script from `-e` text or read the `.rp` file and decode it with `--encoding`.
+3. Tokenize and parse; run static checks on variables, sort keys, expression names and logical types (`report.Tokenize`, `report.Parse`).
+4. With `--check`/`-r`: print `Script sem erros de sintaxe.` and exit 0 without reading data.
+5. Read the whole data file or stdin; decode; split into records (`delimited`, `csv`, `json`); normalize decimal commas when selected.
+6. Type every field by its `input` column and verify `before`/`after` targets (`report.NovoInterp`).
+7. `csv`/`json`: stable-sort and serialize the records; no report section runs.
+8. `text`/`html`: stable-sort, run sections with control breaks, paginate; HTML fills a template.
+9. Apply `--box` and `--newline`, encode, write to stdout or `-o`; exit 0. Script, data or I/O error exits 1.
 
 ### Out of scope
 
-- No network service, daemon or API; no database (input is one file or stdin per run).
-- CSV/JSON output ignores `using` masks, widths, margins and event sections (`cmd/rptgo/csv.go`, `Interp.LinhasOrdenadas`).
-- The `.rp` language reads only a decimal point on input; the decimal comma is an opt-in CLI extension (`ajustaDecimalEntrada`).
-- `--box` is invalid with non-text/html formats and with `latin-1` text output (`analisaArgs`).
+- No server, worker or scheduler: the only entrypoint is `cmd/rptgo/main.go`.
+- No database access: input comes from files or stdin; query results arrive as another program's output (`README.md`).
+- No direct PDF writer: output formats are `text`, `csv`, `json`, `html` (`valoresFormato`); a browser produces the PDF.
+- No layout in `csv`/`json` output: only `input` and `sort` apply (`LinhasOrdenadas`).
 
 ## Related documents
 
-- [`architecture.md`](architecture.md) — package layout, layers and the run pipeline
-- [`domain_rules.md`](domain_rules.md) — input detection, typing, sorting and break rules
-- [`api_contracts.md`](api_contracts.md) — CLI flags, exit codes, template and output formats
+- [`architecture.md`](architecture.md) — packages, layers and directory layout
+- [`domain_rules.md`](domain_rules.md) — report language semantics
+- [`api_contracts.md`](api_contracts.md) — CLI, script grammar and data formats

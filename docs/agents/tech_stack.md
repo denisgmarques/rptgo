@@ -6,36 +6,60 @@
 
 ### Runtime and language
 
+- **Language**: Go 1.25 (`go.mod`: `go 1.25`)
+- **Framework**: No primary framework
+
 | Item | Value |
 |---|---|
-| Build output | Native static binary `rptgo` (`go build -o rptgo ./cmd/rptgo`) |
-| Module | `rptgo` (`go.mod`) |
-| Package manager | Go modules; no `require`, no `go.sum` |
-| Standard library in use | `encoding/csv`, `encoding/json`, `regexp`, `time`, `sort`, `strconv`, `bufio`, `encoding/base64`, `html` |
+| Runtime | Native CLI binary; single static binary (`README.md`) |
+| Package manager | Go modules, module `rptgo`; no `require` block, no `go.sum` |
+| Libraries | Standard library only: `encoding/csv`, `encoding/json`, `encoding/base64`, `html`, `regexp`, `time` |
+| License | MIT (`LICENSE`) |
 
-- **Language**: Go 1.25
-- **Framework**: No primary framework
+### Commands
+
+```sh
+go build -o rptgo ./cmd/rptgo
+go test ./...
+go test -run '^$' -bench Converte200k -benchmem ./internal/report/
+go test -run '^$' -bench Entrada -benchmem ./cmd/rptgo
+go test -run '^$' -bench 'Entrada|Relatorio' -benchmem ./cmd/rptgo
+```
+
+- Golden update flag: `-update` (`internal/report/golden_test.go`).
+- No CI workflow, Makefile, linter config, formatter config, `.editorconfig` or active git hook in the repository.
 
 ### Tests
 
-| Item | Value |
-|---|---|
-| Runner | Go stdlib `testing` (`go test ./...`) |
-| Assertion lib | None (plain `t.Errorf`/`t.Fatalf`) |
-| Mock lib | None |
-| Coverage tool | None configured |
-| Golden files | `internal/report/testdata/golden/` (`go test ./internal/report -run Golden -update`) |
-| Benchmark | `BenchmarkConverte200k` (`internal/report/bench_test.go`) |
-| Doc tests | `cmd/rptgo/readme_test.go`: `<!-- file: -->`, `<!-- run -->`, `<!-- expect -->`, `<!-- run-only -->` blocks and README images; the same runner covers `README.md`, `SAIDA-HTML.md`, `examples/*/README.md` and the `REFERENCIA.md` examples |
-| Example tests | `cmd/rptgo/examples_test.go` |
-| Lint / CI / Makefile | None |
+| Concern | Tool | Version |
+|---|---|---|
+| Runner | Go `testing`: 125 `Test*`, 5 `Benchmark*` functions | Go toolchain |
+| Assertion lib | None; `t.Errorf` / `t.Fatalf` | stdlib |
+| Mock lib | None; hand-written helpers (`leitorVigiado`) | not found |
+| Coverage tool | None configured | not found |
+
+- Locations: `cmd/rptgo/*_test.go`, `internal/report/*_test.go`, `internal/report/testdata/golden/`.
+- Documentation tests: `cmd/rptgo/readme_test.go` runs marked blocks in `README.md`, `SAIDA-HTML.md`, `examples/*/README.md`, `REFERENCIA.md`.
+
+### Script tooling
+
+| Tool | Used by | Version |
+|---|---|---|
+| Bash | `scripts/render-readme-images.sh`, `examples/*/run.sh` | unpinned |
+| Google Chrome / Chromium | `scripts/render-readme-images.sh` (HTML to PDF) | unpinned |
+| poppler-utils `pdftoppm` | `scripts/render-readme-images.sh` (PDF to PNG) | unpinned |
+| Python 3 + Pillow | `scripts/render-readme-demo.py` (`docs/images/demo.gif`) | unpinned |
+| curl | demo script, `examples/{feriados-brasil,fipe-veiculos}/run.sh` | unpinned |
 
 ### External integrations
 
-None. No network clients, databases or third-party packages. `scripts/render-readme-images.sh` needs Go, a headless browser and `pdftoppm` (docs tooling only).
+| System | Client wiring |
+|---|---|
+| BrasilAPI | `curl -sf https://brasilapi.com.br/api/feriados/v1/<year>` piped to `rptgo` |
+| FIPE | `curl -sf` against `FIPE_API` (default `https://fipe.parallelum.com.br/api/v2/cars/brands`) piped to `rptgo` |
 
 ## Related documents
 
+- [`dependencies.md`](dependencies.md) — services and internal packages
+- [`coding_guidelines.md`](coding_guidelines.md) — code and test conventions
 - [`architecture.md`](architecture.md) — package layout
-- [`dependencies.md`](dependencies.md) — dependency inventory
-- [`coding_guidelines.md`](coding_guidelines.md) — test and code conventions

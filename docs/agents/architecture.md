@@ -6,47 +6,66 @@
 
 ### Style
 
-Two-package layered CLI: a thin `main` package (`cmd/rptgo`) for I/O, options and writers over an `internal/report` interpreter library (lexer, parser, type check, evaluator).
+- Single-binary CLI in 2 Go packages: an I/O shell (`cmd/rptgo`) over an interpreter pipeline (`internal/report`: lexer, parser, static checks, tree-walking interpreter).
 
 ### Directory layout
 
 ```
-cmd/rptgo/                 CLI (package main)
-  main.go                  executar(): arg parse, read, dispatch by --format, write
-  entrada.go               input readers (delimited helper in main.go, CSV, JSON), delimiter/decimal detection
-  csv.go                   csvOpcoes, escreveCSV, quoting modes
-  json.go                  escreveJSON (hand-built objects, declared key order)
-  html.go                  template tokenizer/renderer, default A4 template, logo data URI
-  box.go                   ASCII box (+---+, |) to line-drawing characters
-  cp850.go                 cp850 <-> rune tables
-  ajuda.go                 help text, delimitadorCSV, csvOpcoesValidas
-  *_test.go                CLI tests, readme_test.go, examples_test.go
-internal/report/           interpreter library
-  lexer.go parser.go ast.go   tokens -> Script AST
-  tipos.go                 verificaTipos (logical vs arithmetic), verificaNomes (named expressions)
-  interp.go                Interp: typing of input, sort, break levels, events, pagination
-  value.go format.go dates.go   values, `using` masks, date parse/format
-  config.go errors.go      env config + RPT_NOW clock, errors with source line
-  testdata/golden/         .rp/.dat inputs and .txt baselines
-examples/                  9 example dirs (script, data, README; some with run.sh/template); relatorio-vendas-regiao has csv/json variants
-docs/images/               README images (scripts/render-readme-images.sh)
+.
+├── cmd/rptgo/                 # package main: CLI
+│   ├── main.go                #   args, orchestration, encodings, delimited reader
+│   ├── ajuda.go               #   help text, allowed flag values, usage errors
+│   ├── entrada.go             #   CSV/JSON readers, delimiter and decimal detection
+│   ├── csv.go, json.go        #   data writers
+│   ├── html.go                #   HTML template renderer, built-in A4 template, logo
+│   ├── box.go                 #   ASCII box to line-drawing conversion
+│   ├── cp850.go               #   CP850 table
+│   └── *_test.go              #   CLI, example and documentation tests
+├── internal/report/           # package report: interpreter
+│   ├── lexer.go               #   tokens with line, column, source text
+│   ├── parser.go, ast.go      #   recursive-descent parser, syntax tree
+│   ├── ordenacao.go           #   sort key checks
+│   ├── tipos.go               #   logical vs arithmetic checks, expression name checks
+│   ├── interp.go              #   typing, sort, control breaks, aggregation, pagination, layout
+│   ├── value.go               #   dynamic values, comparison, arithmetic
+│   ├── format.go, dates.go    #   masks, wrapping, dates, times
+│   ├── config.go, errors.go   #   env config and clock, error type and diagnostics
+│   └── testdata/golden/       #   .rp / .dat / .txt text-mode references
+├── examples/                  # 10 runnable report and conversion examples
+├── scripts/                   # README image and demo GIF generators
+├── docs/                      # agents/ (context docs), images/
+├── README.md, REFERENCIA.md, SAIDA-HTML.md   # user docs (pt-BR), test-verified
+└── go.mod                     # module rptgo
 ```
 
 ### Layer responsibilities
 
 | Layer | Owns | Does NOT own |
 |---|---|---|
-| `cmd/rptgo` | Flags, exit codes, file/stdin I/O, encodings, input readers, CSV/JSON/HTML/box writers | Script parsing, expression evaluation, pagination rules |
-| `report` lexer/parser/ast | Script syntax, defaults (`WIDTH`, `PAGELN`, `SEPARATOR`), AST | Data conversion, output |
-| `report` tipos | Static logical/arithmetic check, named-expression conflicts | Runtime evaluation |
-| `report` interp/value/format/dates | Row typing, sort, break levels, aggregates, masks, dates, pages | Flags, files, output formats other than text pages |
+| CLI (`main.go`, `ajuda.go`) | Flag parsing and combination rules, file and stdin I/O, `--encoding`, `--newline`, exit codes, error printing | Script semantics, value typing |
+| Input adapters (`leRegistros`, `entrada.go`) | Turn delimited, CSV or JSON into `[][]string`; header skip; decimal-comma cleanup | Typing by column (`Interp.tipa`) |
+| Lexer and parser (`lexer.go`, `parser.go`) | Tokens, `Script` tree, page defaults, column types, function arity | Data access |
+| Static checks (`ordenacao.go`, `tipos.go`) | Sort key names and functions, logical expressions, expression name clashes | `before`/`after` target check (`verificaEventos` in `interp.go`) |
+| Interpreter (`interp.go`, `value.go`, `format.go`, `dates.go`) | Typing, sort, control breaks, aggregation functions, masks, pagination | File output, CSV/JSON/HTML serialization |
+| Output adapters (`csv.go`, `json.go`, `html.go`, `box.go`) | Serialize rows or pages | Sorting, section execution |
 
-### External integrations
+- Dependency direction: `cmd/rptgo` imports `rptgo/internal/report`; `report` imports standard library only.
+- Package API used by the CLI: `Tokenize`, `Parse`, `NovoInterp`, `Interp.Run`, `Interp.Paginas`, `Interp.LinhasOrdenadas`, `DefFonteScript`, `DefFonteDados`, `Agora`; types `Script`, `InputCol`, `Row`, `Value`, `Hora`.
+- Pipeline selection by format (`executar`): `csv`/`json` call `LinhasOrdenadas`; `html` calls `Paginas`; `text` calls `Run`.
+- Shared state: package globals `FonteScript`, `FonteDados` (`errors.go`) feed error context; `nomePrograma` (`ajuda.go`) prefixes messages.
 
-None. Dependencies are the Go standard library only (`go.mod` has no `require`).
+### External integration points
+
+| System | Client/config | Notes |
+|---|---|---|
+| BrasilAPI holidays | `curl` in `examples/feriados-brasil/run.sh` | Pipes JSON to `--input json`; year argument, default 2026 |
+| FIPE API | `curl` in `examples/fipe-veiculos/run.sh`; env `FIPE_API`, `RPT` | Runs the binary twice: `anos.rp` to CSV, then `relatorio.rp` |
+| Chrome/Chromium, `pdftoppm` | `scripts/render-readme-images.sh` | Documentation images only |
+
+- The binary opens no network connection; it reads and writes files and standard streams.
 
 ## Related documents
 
-- [`project_overview.md`](project_overview.md) — purpose and macro flow
-- [`tech_stack.md`](tech_stack.md) — language, tests, tooling
-- [`coding_guidelines.md`](coding_guidelines.md) — code conventions observed in both packages
+- [`project_overview.md`](project_overview.md) — purpose and end-to-end flow
+- [`domain_rules.md`](domain_rules.md) — interpreter behavior
+- [`dependencies.md`](dependencies.md) — packages and external tools

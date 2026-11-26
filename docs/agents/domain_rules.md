@@ -6,103 +6,238 @@
 
 ### Overview
 
-- Script (`.rp`) = `input` columns, page settings (`width`, `length`, margins, `separator`), `sort` keys, event sections (`header`, `footer`, `detail`, `before X`, `after X`) (`internal/report/ast.go`, `parser.go`).
-- Record = positional `Row []Value`; column name to index via `Interp.colIdx`.
-- Control break = change of a sort key between consecutive sorted rows.
-- Named expression = `<name> expr` in `sort` or `print`, usable like a column.
+- Script: `input` columns, page settings, `sort` keys, event sections (`ast.go` `Script`).
+- Sections: `header`, `footer`, `detail`, `before report|<key>`, `after report|<key>`.
+- Control break: change in a sort key value closes and opens groups.
+- Aggregation functions: `count`, `total`, `avg`, `min`, `max`.
+- Page: fixed-width, fixed-length text grid with margins.
 
-### Input sources
+### Script structure
 
-| `--input` | Reader | Notes |
+- Identifiers and keywords are case-insensitive: lexer lowercases them (`lexer.go`).
+- `end` is mandatory and stops parsing; later tokens are ignored (`parser.go` `Parse`).
+- `input` is mandatory; each event section appears at most once.
+- Defaults: width 80, length 66, top/bottom/left margin 2, separator `|`. Env `WIDTH`, `PAGELN`, `SEPARATOR` replace defaults; script statements override env.
+- `/* */` comments span lines; `--strict` requires 1 line.
+- Parse checks order: syntax, `input` present, collect `set` variables, sort keys, expression names, logical types.
+
+### Column typing
+
+| Type | Conversion (`Interp.tipa`) | Empty field |
 |---|---|---|
-| `delimited` (default) | `leRegistros` | Split by script separator (default `\|`); a blank line is one empty field; one trailing empty field tolerated when count is `ncols+1`; CR stripped |
-| `csv` | `leRegistrosCSV` | `encoding/csv`, BOM stripped, lazy quotes, quoted fields may hold delimiter, doubled quotes, newlines |
-| `json` | `leRegistrosJSON` | Array of objects, or one object per line/sequence |
+| `numeric`, `integer`, `long`, `int` | Parse as float, truncate to int64 | null |
+| `float`, `amount`, `double`, `real`, `huge` | float64 | null |
+| `bool` | Finite number: 0 false, else true; else first letter N/F false, Y/T true; else null | null |
+| `time` | `H:MM`, `HH:MM`, `HH:MM:SS` (fraction ignored) | null |
+| `date`, `ldate` | `ParseData` | null |
+| `string` (default) | Trailing whitespace trimmed; cut to declared size in runes | empty string |
+| `text` | Trailing whitespace trimmed; size ignored | empty string |
 
-- Header row: `--header auto` drops the first record when its first field equals the first input column name (case-insensitive for csv; `leRegistros` compares the lowercased first field to the column name); `sim` always drops; `nao` never.
-- JSON: key matched to column exactly, then case-insensitively; `null` or missing key = empty field; numbers keep their text via `UseNumber`; booleans become `true`/`false`; nested object/array is an error; a column absent from every record is an error; a non-object array item is an error.
+- Unknown or missing type: parse error listing the 15 valid types (`tiposColuna`).
+- Keyword read as a column name after a comma adds a stray-comma hint to the next error (`pInput`).
+- Field count differing from column count stops with `phase error` (`Interp.converte`).
+- Invalid number, date or time stops with record number and data line.
 
-### CSV delimiter auto-detection
+### Dates and times
 
-- `detectaDelimitadorCSV` (`cmd/rptgo/entrada.go`): used when `--input csv` and `--input-delimiter` is empty or `auto`.
-- Sample = first 64 KiB cut at the last newline; candidates in order `;` `,` tab `|`; reads up to 30 records per candidate using CSV quoting rules.
-- Pass 0: score = records with exactly `len(script.Input)` fields (needs ncols >= 2). Highest score wins; ties go to the earlier candidate.
-- Pass 1 (only when pass 0 scored 0): score = records with the same field count as the first record (first record needs >= 2 fields).
-- No signal: comma.
-- Explicit delimiter names: `comma`, `semicolon`, `tab`, `pipe`, `\t`, or one character (not `"`, CR, LF).
+Implementation: `dates.go`.
 
-### Decimal comma on input
+- Field order follows `DATEFMT` (default `DD/MM/YY`); separators `/`, `.`, `-`.
+- ISO `YYYY-MM-DD` accepted unless `DATEFMT` starts with the year.
+- 2-digit year: `>= CENTURY_CUTOFF` (default 30) gives 19xx, else 20xx.
+- Day and month ranges are not validated: `time.Date` rolls over (`31/02/2026` prints as `03/03/2026`).
+- Print year width: 4 digits for a direct `ldate` column and for `today` (2 with `--strict`); every other date expression prints 2.
+- `time` is seconds since midnight, 00:00:00 to 23:59:59; printed with `TIMEFMT` (default `HH:MM`).
 
-- Default: decimal point only; the language reads `1250.50`.
-- `--input-decimal ','` runs `ajustaDecimalEntrada`: in numeric columns only, strip all `.` then replace the first `,` with `.` (`1.250,50` to `1250.50`). Numeric types: `numeric integer long int float amount double real huge`.
-- `--input-decimal auto` runs `detectaDecimalEntrada`: comma when at least 1 numeric value matches `^-?(\d{1,3}(\.\d{3})+|\d+),\d+$` and 0 match `^-?\d+\.\d+$` (a thousands-shaped `1.250` is ignored); otherwise point. Delimiter `,` always yields point.
-- Conflicts: explicit `--input-delimiter comma|,` with `--input-decimal ','` = usage error (exit 2); auto-detected comma delimiter with decimal `,` = runtime error (exit 1, message asks for `--input-delimiter ';'`); `--input-decimal` with `--input json` = usage error.
+### Values, null and truth
 
-### Input typing
+Implementation: `value.go`, `interp.go`.
 
-`Interp.tipa` (`internal/report/interp.go`):
+- False: null, 0, 0.0, empty string, false.
+- `is null` matches null and empty string.
+- Comparison turns null into the other side's neutral value: `""`, zero date, 00:00, 0.
+- Bool compares as 0/1.
+- One string side compares both as strings; ordering is case-sensitive.
+- Time compares only with time or null; date against number is a type error that stops the report.
+- Unary minus on a false value yields 0.
 
-| Column type | Result | Empty field |
+### Arithmetic
+
+| Operands | Result (`aritm`, `aritmHora`) |
+|---|---|
+| int/null with int/null | int; `/` truncates; `%` remainder |
+| Any float | float; `%` uses `math.Mod` |
+| string `+` string | Concatenation |
+| `/+` (text only) | Trim trailing spaces of left side, concatenate |
+| Other string arithmetic with numbers | String counts as 0 |
+| date − date | Days |
+| date ± number, number + date | Date shifted by days |
+| time − time | Minutes |
+| time ± number, number + time | Time shifted by minutes, wraps at 24h |
+| Divide or modulo by 0 | Error `divisão por zero` |
+
+- Precedence, low to high: `or`, `and`, `not`, comparison and `is [not] null`, `+ - /+`, `* / %`, unary, postfix `substr`.
+- `substr [start-end]`: 1-based, inclusive, runes; start ≥ 1 and end ≥ start checked at parse; text only; null stays null.
+
+### Logical expression typing
+
+Implementation: `tipos.go` `verificaTipos`.
+
+- `if` conditions, `where` filters and `and`/`or`/`not` operands must be logical.
+- Logical: comparisons, `is null`, `and`, `or`, `not`, `bool` columns, expression names resolving to those.
+- `set` variables and unknown names pass the static check.
+
+### Names, variables and named expressions
+
+- Resolution order: set variable value, declared but unset variable (null), input column, named expression, else error `nome desconhecido` (`Interp.ev`).
+- Name an expression with `<name> expr` in `sort` or `print`; use it like a column.
+- Reusing a name for a different expression is an error; an expression name must not equal a column or variable (`verificaNomes`).
+- Self-referencing expression stops at depth 32.
+- Variable named like an input column is an error raised after data conversion (`verificaEventos`).
+
+### Functions
+
+| Function | Arguments | Result |
 |---|---|---|
-| `numeric integer long int` | `int64`, float parsed then truncated | nil |
-| `float amount double real huge` | `float64` | nil |
-| `bool` | `normalizaBool` | nil |
-| `date`, `ldate` | `time.Time` via `ParseData` | nil |
-| `string [N]` | text, right whitespace trimmed, cut to N runes | `""` |
-| other | right-trimmed text | `""` |
+| `dow(d)` | 1 | 0 Sunday to 6 Saturday; null for null; non-date is a type error |
+| `mdy(d, n)` | 2 | n=0 month, 1 day, 2 year, else null; non-date is a type error |
+| `index(i, a, b, ...)` | ≥1 | Argument at zero-based position i after `i`; out of range gives `""` |
+| `count`, `total`, `avg`, `min`, `max` | 1, or `*` | Aggregation over the current group |
+| `today`, `hour`, `pageno` | none | Report date, time of day, page number |
 
-- Record field count must equal column count, else `phase error no arquivo de entrada: registro N tem X campos, esperados Y`.
-- Bool: finite number (0 false, other true) or first letter N/F false, Y/T true, else nil (`internal/report/value.go`).
-- Dates (`internal/report/dates.go`): field order from `DATEFMT` (default `DD/MM/YY`); 2-digit year `>= CENTURY_CUTOFF` (default 30) is 19xx else 20xx; 4-digit year used as written; `YYYY-MM-DD` accepted when `DATEFMT` does not start with the year; separators `/`, `.`, `-`. `date` prints 2-digit years, `ldate` 4.
+- Wrong arity and `*` on a non-aggregation function fail at parse (`confereArgumentos`).
+- Unknown function fails at execution; inside `sort` it fails at parse.
 
-### Type check (logical vs arithmetic)
+### Aggregation functions
 
-- `verificaTipos` (`internal/report/tipos.go`) runs at end of `Parse`. `and`, `or`, `not`, `if` conditions and `count(* where ...)` need logical expressions: comparison, `is [not] null`, and/or/not, or a `bool` column.
-- Arithmetic (`+ - * /`, negation) is not accepted there. `set` variables have unknown type and are accepted anywhere.
-- Error text names the construct and source line (for example `a condição do 'if' precisa ser uma expressão lógica`).
+Implementation: `Interp.chama`.
 
-### Named expressions and break levels
+- Filter with `where`: `count(* where active)`, `total(salary where active)`.
 
-- `sort a, b` gives break levels named after the column; `<name> expr` is needed only for computed keys (`parser.go` `pSort`).
-- `before X` / `after X` must name a sort key or `report`; else `'X' na seção before não é uma expressão de sort existente` (`verificaEventos`).
-- `verificaNomes`: a name cannot equal an input column or a `set` variable. A name that references itself fails at depth 32 (`a expressão nomeada '<n>' refere-se a si mesma`).
-- A section appears once (`a seção '<ev>' só pode aparecer uma vez`).
+| Function | Nulls | Empty group |
+|---|---|---|
+| `count` | Counted | 0 |
+| `total` | Ignored; int when all values are int | 0 |
+| `avg` | Ignored; float | 0 |
+| `min`, `max` | Ignored | null |
 
-### Execution and breaks
+| Section | Group seen |
+|---|---|
+| `after <key>` | Records of the closing group |
+| `after report` | All records |
+| `before ...`, `detail` | Empty group |
+| First-page `header`, footer height measurement | Error |
+| `header` on a page break, `footer` at page close | Group of the running section if any; errors discarded |
 
-`Interp.executa`:
+### Sorting
 
-1. Sort stable by keys; nil sorts first; `desc` reverses.
-2. Footer height measured by a dry run.
-3. No records = error `não há registros de entrada`.
-4. `header` runs on every page, page 1 included. Without `before report`, it runs first, before the first row. With `before report`, it runs right after `before report` on the first row. With `Interp.Strict` (`--strict`) and a `before report` section, page 1 has no header; later pages still run it (`novaPagina`, `Interp.executa`).
-5. Per row: compare keys to the previous row; on change at level `j`, run `after` for levels `n-1` down to `j`, then `before` for `j` up to `n-1`, then `detail`.
-6. End: `after` of each level, `after report`, flush, close page.
+Implementation: `Interp.ordena`, `ordenacao.go`.
 
-Aggregates `count total avg min max` work only inside `after <key>` and `after report`; elsewhere error. `total` of integers stays `int64`; empty set gives 0 (`min`/`max` nil). Nulls are skipped. Other functions: `dow` (0=Sunday), `mdy(date, 0|1|2)` = month/day/year, `index(i, a, b, ...)`.
+- Stable sort; keys compared left to right; `desc` per key.
+- Null keys come first ascending, last descending.
+- Key name: explicit `<name>`, else the column name, else none.
+- Sort keys accept input columns, `set` variables, named expressions (checked recursively) and only `dow`, `mdy`, `index`; checked at parse.
+- Type errors during key evaluation or comparison stop with `no sort: ...`; other key evaluation errors leave the key null.
 
-### Expression semantics
+### Control breaks and section order
 
-- Truthiness: nil, 0, `""`, false are false (`verdade`).
-- `/` on two integers is integer division; `%` is modulo; zero divisor = `divisão por zero`.
-- Dates: date - date = days (`int64`); date +/- N = date.
-- `today` alone prints as `ldate` (4-digit year) unless `--strict`, which keeps it a `date` (2-digit year). `today - 1` and other arithmetic on `today` still print as `date` (`Interp.ehLdate`, `internal/report/interp.go`; `cmd/rptgo/main_test.go`).
-- `+` joins two strings; `/+` joins after trimming trailing blanks of the left side (text only).
-- `substr [start-end]`: 1-based, end inclusive, rune-based; nil stays nil; non-text is an error.
-- Comparisons normalize nil to a neutral value of the other side (`""`, zero date, 0).
+Implementation: `Interp.executa`.
 
-### Output value rules
+1. `header` on page 1 when no `before report` exists.
+2. `before report`, then `header` (skipped there with `--strict`).
+3. On a break: `after <key>` inner to outer, down to the first changed level, using the previous record.
+4. `before <key>` outer to inner for the opened levels, using the new record.
+5. `detail` for every record.
+6. After the last record: all `after <key>` inner to outer, then `after report`.
+7. Close the last page with `footer`.
 
-| Format | Null | Date | Number | Bool |
+- First changed sort key breaks that level and all inner levels.
+- Unnamed keys take part in break detection but own no section.
+- `before`/`after` target must be `report` or a sort key name; checked after data is read, so `--check` accepts a wrong target.
+- Zero records in `text`/`html`: error `não há registros de entrada`.
+- `csv`/`json`: no section runs.
+
+### Pagination
+
+- Body lines per page: `length - top - bottom - footer height`; HTML `--lines N` replaces `length - top - bottom`.
+- Footer height is measured by a dry run on the first sorted record; variables are restored.
+- Full body starts a new page automatically; `header` runs on each new page.
+- `page` forces a break (options `no footer`, `no header`); empty body: no effect.
+- `need N` breaks when fewer than N lines remain; `skip [N]` emits N blank lines (default 1).
+- Footer sits at the bottom of the body area.
+- Text output pads pages to `length`; `--form-feed` skips padding and joins pages with `\f`; HTML drops top and left margins and padding.
+- Errors from `header` on a page break and from `footer` at page close are discarded (`novaPagina`, `fechaPagina`).
+
+### Print layout
+
+Implementation: `printStmt`, `formata`.
+
+- Item without `col`: column 1 on an empty line, else 1 space after the previous item.
+- `col N` places absolutely and overwrites; column < 1 is an error.
+- `centered`: computed over `width - left margin`.
+- `no newline` keeps the line buffer open.
+- Lines are cut at `width - left margin`.
+- Wrapped text continuation lines follow the main line at the same column.
+
+| Value without `using` | Printed |
+|---|---|
+| int | Plain digits |
+| float | 2 decimals, `.` |
+| bool | `YES` / `NO` |
+| Null `bool` column | `***` |
+| Other null | Empty |
+| `string` column with size | Padded to the size |
+| date, time | `DATEFMT`, `TIMEFMT` layout |
+
+### Masks
+
+Implementation: `format.go`.
+
+- String mask `'N'` or `'Nr'`: word wrap at N, measured in bytes; longer words are cut; N < 1 is an error. Numeric mask on text prints blank.
+- printf mask: `%[-][width][.precision][l|ll](d|i|f)`; other `%` forms are errors.
+- Native mask rounds half-up; digits beyond the mask are prefixed, widening the output.
+
+| Symbol | Without a digit |
+|---|---|
+| `#` | Space |
+| `&` | `0`; turns every `# $ * + - (` position to its right into `&` |
+| `*` | `*` |
+| `-` | `-` once for negatives, else space |
+| `+` | Sign once, else space |
+| `$` | `CURRSYM` first byte once, else space |
+| `(` `)` | Parentheses for negatives |
+| `,` | `TRIADSEP` first byte between digits; inside a floating sign or currency run acts as that symbol |
+| `.` | Decimal point, printed as `RADIXSEP` |
+
+### Input decimal and delimiter detection
+
+Implementation: `entrada.go`.
+
+| Case | Rule |
+|---|---|
+| CSV delimiter `auto` | Try `; , tab \|` on up to 30 records (64 KiB sample); most records with the `input` column count wins; else most consistent field count; else `,` |
+| Decimal `auto`, delimited/CSV | `,` when a numeric value uses decimal comma and none uses decimal point; always `.` with CSV delimiter `,` |
+| Decimal `auto`, JSON | `,` when any quoted numeric value uses decimal comma |
+| Decimal `,` | Strip currency symbol and thousands dots in numeric columns only; real JSON numbers untouched |
+
+### Output matrix
+
+| `--format` | Sections | Sort | Pagination | `using` masks |
 |---|---|---|---|---|
-| csv | empty | `YYYY-MM-DD` | shortest decimal; `--csv-decimal` swaps the point | `true`/`false` |
-| json | `null` | `"YYYY-MM-DD"` | JSON number | JSON boolean |
+| `text` | Run | Yes | Yes | Yes |
+| `html` | Run | Yes | Yes, no padding | Yes |
+| `csv` | Skipped | Yes | No | No |
+| `json` | Skipped | Yes | No | No |
 
-- CSV quoting: `minimal` quotes when the field has the delimiter, `"`, CR/LF or leading blank; `strings` also quotes text values and the header; `all` quotes everything. A single empty field row prints `""`. `--csv-delimiter` and `--csv-decimal` cannot be the same character.
-- Text masks (`using`): `%printf` or `# & * + - $ ( ) , .` pictures; `CURRSYM` (default `$`) and `RADIXSEP` (default `.`) apply.
+- Add a format: extend `valoresFormato` (`ajuda.go`) and the `switch op.formato` in `executar` (`main.go`).
+
+### Box drawing
+
+- `--box` turns `+`, `-`, `|` into line characters only where neighbors connect; isolated `-` and `|` stay (`box.go`).
+- Each form-feed page converts separately.
 
 ## Related documents
 
-- [`api_contracts.md`](api_contracts.md) — flags and formats that expose these rules
-- [`data_model.md`](data_model.md) — in-memory row model
+- [`api_contracts.md`](api_contracts.md) — CLI flags, grammar, data formats
 - [`architecture.md`](architecture.md) — where each rule lives
+- [`data_model.md`](data_model.md) — in-memory structures
