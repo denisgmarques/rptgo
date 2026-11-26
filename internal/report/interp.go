@@ -431,13 +431,19 @@ func (it *Interp) chama(e CallExpr) (Value, error) {
 		if args[0] == nil {
 			return nil, nil
 		}
-		d := args[0].(time.Time)
+		d, ok := args[0].(time.Time)
+		if !ok {
+			return nil, erroDeTipo("a função dow() espera uma data")
+		}
 		return int64(d.Weekday()), nil // time.Weekday: 0=domingo..6=sábado, igual a isoweekday()%7
 	case "mdy":
 		if args[0] == nil {
 			return nil, nil
 		}
-		d := args[0].(time.Time)
+		d, ok := args[0].(time.Time)
+		if !ok {
+			return nil, erroDeTipo("a função mdy() espera uma data")
+		}
 		switch int(paraFloat(args[1])) {
 		case 0:
 			return int64(d.Month()), nil
@@ -727,6 +733,9 @@ func (it *Interp) formata(v, m Value, longa bool) ([]string, error) {
 		if m != nil {
 			ms, _ := m.(string)
 			if larg, ok := ehMascaraString(ms); ok {
+				if larg < 1 {
+					return nil, Erro("máscara de texto inválida: %q (a largura começa em 1)", ms)
+				}
 				return QuebraTexto(s, larg), nil
 			}
 			// uma máscara numérica aplicada a um campo de texto não dá erro: imprime em branco.
@@ -759,29 +768,34 @@ func (it *Interp) formata(v, m Value, longa bool) ([]string, error) {
 
 // ---------------------------------------------------------------- ordenação e execução
 
-func (it *Interp) chave(r Row) []Value {
+func (it *Interp) chave(r Row) ([]Value, error) {
 	salvo := it.row
+	defer func() { it.row = salvo }()
 	it.row = r
 	ks := make([]Value, len(it.S.Sort))
 	for i, sk := range it.S.Sort {
-		v, _ := it.ev(sk.Expr) // nomes e funções já conferidos no Parse; outro erro vira chave nula
-		ks[i] = v
+		v, err := it.ev(sk.Expr)
+		if e, ok := err.(*Error); ok && e.deTipo {
+			return nil, Erro("no sort: %v", err)
+		}
+		ks[i] = v // nos outros erros a chave fica nula (nomes e funções já foram conferidos no Parse)
 	}
-	it.row = salvo
-	return ks
+	return ks, nil
 }
 
 // LinhasOrdenadas devolve os registros na ordem da cláusula 'sort', sem executar nenhuma
 // seção de evento (before/after/header/footer/detail), sem tocar em variáveis nem em
 // paginação. É a base das saídas CSV/JSON, que só consultam 'input' e 'sort'.
-func (it *Interp) LinhasOrdenadas() []Row {
-	it.ordena()
-	return it.rows
+func (it *Interp) LinhasOrdenadas() ([]Row, error) {
+	if err := it.ordena(); err != nil {
+		return nil, err
+	}
+	return it.rows, nil
 }
 
-func (it *Interp) ordena() {
+func (it *Interp) ordena() error {
 	if len(it.S.Sort) == 0 {
-		return
+		return nil
 	}
 	type par struct {
 		k []Value
@@ -789,8 +803,13 @@ func (it *Interp) ordena() {
 	}
 	pares := make([]par, len(it.rows))
 	for i, r := range it.rows {
-		pares[i] = par{k: it.chave(r), r: r}
+		k, err := it.chave(r)
+		if err != nil {
+			return err
+		}
+		pares[i] = par{k: k, r: r}
 	}
+	var errComparacao error // chaves de tipos que não se comparam (data e número)
 	sort.SliceStable(pares, func(i, j int) bool {
 		for n, sk := range it.S.Sort {
 			a, b := pares[i].k[n], pares[j].k[n]
@@ -805,7 +824,10 @@ func (it *Interp) ordena() {
 			case nb:
 				c = 1
 			default:
-				menor, _ := comparar("<", a, b)
+				menor, err := comparar("<", a, b)
+				if err != nil && errComparacao == nil {
+					errComparacao = Erro("no sort: %v", err)
+				}
 				maior, _ := comparar(">", a, b)
 				switch {
 				case menor:
@@ -828,11 +850,14 @@ func (it *Interp) ordena() {
 	for i, p := range pares {
 		it.rows[i] = p.r
 	}
+	return errComparacao
 }
 
 // Run executa o relatório completo e devolve o texto final, já paginado.
 func (it *Interp) executa() error {
-	it.ordena()
+	if err := it.ordena(); err != nil {
+		return err
+	}
 
 	// altura do rodapé: medida com uma execução "seca" antes de começar de verdade
 	if corpo, ok := it.S.Events[EventKey{Kind: "footer"}]; ok && len(it.rows) > 0 {
@@ -893,7 +918,10 @@ func (it *Interp) executa() error {
 		ini = []int{0}
 	}
 	for i, r := range it.rows {
-		k := it.chave(r)
+		k, err := it.chave(r)
+		if err != nil {
+			return err
+		}
 		quebra := 0
 		if prev == nil {
 			if corpo, ok := sec("before", "report"); ok {

@@ -81,7 +81,10 @@ end
 	if err != nil {
 		t.Fatal(err)
 	}
-	linhas := it.LinhasOrdenadas()
+	linhas, err := it.LinhasOrdenadas()
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got []int64
 	for _, r := range linhas {
 		got = append(got, r[2].(int64))

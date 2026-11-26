@@ -162,6 +162,9 @@ func comparar(op string, a, b Value) (bool, error) {
 	if aStr != bStr {
 		a, b = fmt.Sprint(a), fmt.Sprint(b)
 	}
+	if ehData(a) != ehData(b) {
+		return false, erroDeTipo("não é possível comparar uma data com um número")
+	}
 	switch x := a.(type) {
 	case string:
 		y := b.(string)

@@ -135,7 +135,7 @@ func TestTiposValidosNoInput(t *testing.T) {
 }
 
 func TestDicaDaVirgulaSobrando(t *testing.T) {
-	const dica = "foi lido como nome de coluna do input; pode haver uma vírgula sobrando"
+	const dica = "foi lido como nome de coluna do input; pode haver uma vírgula sobrando na linha 1"
 	for _, s := range []string{
 		"input a,\nend", "input a, end", "input a,\nsort a\nend", "input a,\nwidth 80\nend",
 		"input a,\nleft margin 0\nend", "input a,\nbefore report\nend", "input a,\ndetail\n print a\nend",

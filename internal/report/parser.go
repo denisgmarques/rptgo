@@ -89,7 +89,8 @@ func (ps *parser) nx() Token {
 func (ps *parser) erroEm(i int, formato string, args ...any) error {
 	msg := fmt.Sprintf(formato, args...)
 	if ps.virgula >= 0 && i == ps.virgula+1 {
-		msg += fmt.Sprintf("; '%s' foi lido como nome de coluna do input; pode haver uma vírgula sobrando", ps.t[ps.virgula].Src)
+		msg += fmt.Sprintf("; '%s' foi lido como nome de coluna do input; pode haver uma vírgula sobrando na linha %d",
+			ps.t[ps.virgula].Src, ps.t[ps.virgula-1].Line)
 	}
 	tk := ps.t[i]
 	if tk.Kind == TokEOF {
@@ -846,6 +847,9 @@ func (ps *parser) ePrim() (Expr, error) {
 			if _, err := ps.op(")"); err != nil {
 				return nil, err
 			}
+			if err := ps.confereArgumentos(i, v, len(args), star); err != nil {
+				return nil, err
+			}
 			return CallExpr{Name: v, Args: args, Star: star, Where: where}, nil
 		}
 		switch v {
@@ -863,6 +867,39 @@ func (ps *parser) ePrim() (Expr, error) {
 		return nil, ps.erroEm(i, "expressão inválida: %s", ps.fimDoScript())
 	}
 	return nil, ps.erroEm(i, "expressão inválida: encontrado %s", cita(tk))
+}
+
+// argumentosPorFuncao é quantos argumentos cada função recebe ('index' recebe um ou mais).
+var argumentosPorFuncao = map[string]int{"dow": 1, "mdy": 2, "index": 1,
+	"count": 1, "total": 1, "avg": 1, "min": 1, "max": 1}
+
+var funcoesDeAgregacao = map[string]bool{"count": true, "total": true, "avg": true, "min": true, "max": true}
+
+// confereArgumentos valida a chamada da função cujo nome é o token i. Uma função que não existe
+// não é conferida aqui: o erro dela sai na execução.
+func (ps *parser) confereArgumentos(i int, nome string, veio int, estrela bool) error {
+	quer, existe := argumentosPorFuncao[nome]
+	switch {
+	case !existe:
+		return nil
+	case estrela:
+		if funcoesDeAgregacao[nome] {
+			return nil
+		}
+		return ps.erroEm(i, "a função %s() não aceita '*'", nome)
+	case nome == "index":
+		if veio >= quer {
+			return nil
+		}
+		return ps.erroEm(i, "a função index() espera pelo menos 1 argumento")
+	case veio == quer:
+		return nil
+	}
+	plural := "argumento"
+	if quer > 1 {
+		plural = "argumentos"
+	}
+	return ps.erroEm(i, "a função %s() espera %d %s e recebeu %d", nome, quer, plural, veio)
 }
 
 // coletarVariaveis percorre todas as seções marcando quais nomes recebem 'set' em algum

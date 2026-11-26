@@ -182,7 +182,11 @@ func executar(args []string, entradaPadrao io.Reader, saidaPadrao, erroPadrao io
 		if op.formato == "json" {
 			escreve = escreveJSON
 		}
-		if err := escreve(&buf, script, it.LinhasOrdenadas()); err != nil {
+		linhas, err := it.LinhasOrdenadas()
+		if err == nil {
+			err = escreve(&buf, script, linhas)
+		}
+		if err != nil {
 			fmt.Fprintln(erroPadrao, nomePrograma+":", err)
 			return 1
 		}

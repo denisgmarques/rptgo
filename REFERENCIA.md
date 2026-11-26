@@ -1903,7 +1903,7 @@ Ana|30
 ```
 <!-- error -->
 ```text
-rptgo: linha 3: instrução inválida fora de seção: 'print'; 'detail' foi lido como nome de coluna do input; pode haver uma vírgula sobrando
+rptgo: linha 3: instrução inválida fora de seção: 'print'; 'detail' foi lido como nome de coluna do input; pode haver uma vírgula sobrando na linha 1
   3 |    print nome
          ^^^^^
 ```
@@ -2053,8 +2053,9 @@ rptgo: 'grupo' na seção before não é uma expressão de sort existente
 ```
 
 Outros erros frequentes: falta do `end`, falta do `input`, condição aritmética num `if` (seção 7.4),
-operação inválida com horas (`h + g`), comparar hora com número, e `substr` com início menor que 1
-ou fim menor que o início.
+operação inválida com horas (`h + g`), comparar hora ou data com número, `dow` ou `mdy` sobre o que
+não é data, número errado de argumentos numa função, e `substr` com início menor que 1 ou fim menor
+que o início.
 
 ---
 

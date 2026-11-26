@@ -30,7 +30,11 @@ func preparar(t *testing.T, script string, dados []string) (*report.Script, []re
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, it.LinhasOrdenadas()
+	linhas, err := it.LinhasOrdenadas()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, linhas
 }
 
 const scriptTipos = `input

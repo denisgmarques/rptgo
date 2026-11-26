@@ -42,13 +42,21 @@ func comLinha(msg string, linha int, fonte []string) string {
 }
 
 // Error é o único tipo de erro do pacote: erros de sintaxe e de execução são tratados igual.
-type Error struct{ msg string }
+type Error struct {
+	msg    string
+	deTipo bool // valor de tipo errado para a operação: para o relatório mesmo numa chave do sort
+}
 
 func (e *Error) Error() string { return e.msg }
 
 // Erro cria um erro sem linha de origem associada (a maioria dos erros de execução/semântica).
 func Erro(formato string, args ...any) error {
 	return &Error{msg: fmt.Sprintf(formato, args...)}
+}
+
+// erroDeTipo cria um erro de valor com o tipo errado para a operação.
+func erroDeTipo(formato string, args ...any) error {
+	return &Error{msg: fmt.Sprintf(formato, args...), deTipo: true}
 }
 
 // ErroLinhaScript cria um erro anexando a linha do SCRIPT (.rp) correspondente.
